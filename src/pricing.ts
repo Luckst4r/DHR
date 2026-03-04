@@ -11,15 +11,20 @@ interface QuoteResult {
   usdPerPhDay: number;
   totalUsd: number;
   source: string;
+  baseUsdPerPhDay: number;
+  feeUsdPerPhDay: number;
+  marginUsdPerPhDay: number;
 }
 
 const marginBps = Number(process.env.PRICE_MARGIN_BPS ?? '0');
 const floorUsdPerPhDay = Number(process.env.FLOOR_USD_PER_PH_DAY ?? '0');
+const nhFeeBps = Number(process.env.NICEHASH_FEE_BPS ?? '0');
+const braiinsFeeBps = Number(process.env.BRAIINS_FEE_BPS ?? '0');
 
 export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   const marketQuotes = await Promise.allSettled([
-    quoteNicehash(input),
-    quoteBraiinshash(input),
+    quoteNicehash(input, nhFeeBps),
+    quoteBraiinshash(input, braiinsFeeBps),
     quoteInternal(input),
   ]);
 
@@ -37,6 +42,7 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
 
   // apply margin and floor
   const marginMult = 1 + marginBps / 10_000;
+  const marginUsdPerPhDay = best.usdPerPhDay * (marginMult - 1);
   const adjusted = Math.max(best.usdPerPhDay * marginMult, floorUsdPerPhDay);
   const totalUsd = adjusted * (input.ph * (input.hours / 24));
 
@@ -44,6 +50,7 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
     ...best,
     usdPerPhDay: adjusted,
     totalUsd,
+    marginUsdPerPhDay,
   };
 
   return best;
@@ -58,12 +65,19 @@ export async function btcUsd(): Promise<number> {
   return price;
 }
 
-async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
+async function quoteNicehash(input: QuoteInput, feeBps: number): Promise<QuoteResult> {
   const key = process.env.NICEHASH_API_KEY;
   const secret = process.env.NICEHASH_API_SECRET;
   const org = process.env.NICEHASH_ORG_ID;
   if (!key || !secret || !org) {
-    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'nicehash' };
+    return {
+      usdPerPhDay: Number.POSITIVE_INFINITY,
+      totalUsd: Number.POSITIVE_INFINITY,
+      source: 'nicehash',
+      baseUsdPerPhDay: Number.POSITIVE_INFINITY,
+      feeUsdPerPhDay: 0,
+      marginUsdPerPhDay: 0,
+    };
   }
   try {
     // Use public orderBook for SHA256ASICBOOST; price is BTC/TH/day. Convert to USD/PH/day.
@@ -84,17 +98,42 @@ async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
     if (prices.length === 0) throw new Error('no prices');
     const bestBtcPerEhDay = Math.min(...prices); // NiceHash orderbook price is BTC per EH/day
     const btcPrice = await btcUsd();
-    const usdPerPhDay = (bestBtcPerEhDay / 1000) * btcPrice; // EH -> PH
-    return { usdPerPhDay, totalUsd: usdPerPhDay * (input.ph * (input.hours / 24)), source: 'nicehash' };
+    const baseUsdPerPhDay = (bestBtcPerEhDay / 1000) * btcPrice; // EH -> PH
+    const feeMult = 1 + feeBps / 10_000;
+    const feeUsdPerPhDay = baseUsdPerPhDay * (feeMult - 1);
+    const usdPerPhDay = baseUsdPerPhDay * feeMult;
+    return {
+      usdPerPhDay,
+      totalUsd: usdPerPhDay * (input.ph * (input.hours / 24)),
+      source: 'nicehash',
+      baseUsdPerPhDay,
+      feeUsdPerPhDay,
+      marginUsdPerPhDay: 0,
+    };
   } catch (err) {
     console.error('nicehash quote error', err);
-    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'nicehash' };
+    return {
+      usdPerPhDay: Number.POSITIVE_INFINITY,
+      totalUsd: Number.POSITIVE_INFINITY,
+      source: 'nicehash',
+      baseUsdPerPhDay: Number.POSITIVE_INFINITY,
+      feeUsdPerPhDay: 0,
+      marginUsdPerPhDay: 0,
+    };
   }
 }
 
-async function quoteBraiinshash(input: QuoteInput): Promise<QuoteResult> {
+async function quoteBraiinshash(input: QuoteInput, feeBps: number): Promise<QuoteResult> {
   const token = process.env.BRAIINS_READONLY_TOKEN || process.env.BRAIINS_OWNER_TOKEN;
-  if (!token) return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+  if (!token)
+    return {
+      usdPerPhDay: Number.POSITIVE_INFINITY,
+      totalUsd: Number.POSITIVE_INFINITY,
+      source: 'braiins',
+      baseUsdPerPhDay: Number.POSITIVE_INFINITY,
+      feeUsdPerPhDay: 0,
+      marginUsdPerPhDay: 0,
+    };
   try {
     const settings = await braiinsSettings(token);
     const orderbook = await braiinsOrderbook(token);
@@ -104,11 +143,28 @@ async function quoteBraiinshash(input: QuoteInput): Promise<QuoteResult> {
     const btcPrice = await btcUsd();
     const priceBtc = bestPriceSat * 1e-8; // sats -> BTC per hr_unit
     const usdPerHrUnit = priceBtc * btcPrice;
-    const usdPerPhDay = usdPerHrUnit * settings.hrUnitToPhDay;
-    return { usdPerPhDay, totalUsd: usdPerPhDay * (input.ph * (input.hours / 24)), source: 'braiins' };
+    const baseUsdPerPhDay = usdPerHrUnit * settings.hrUnitToPhDay;
+    const feeMult = 1 + feeBps / 10_000;
+    const feeUsdPerPhDay = baseUsdPerPhDay * (feeMult - 1);
+    const usdPerPhDay = baseUsdPerPhDay * feeMult;
+    return {
+      usdPerPhDay,
+      totalUsd: usdPerPhDay * (input.ph * (input.hours / 24)),
+      source: 'braiins',
+      baseUsdPerPhDay,
+      feeUsdPerPhDay,
+      marginUsdPerPhDay: 0,
+    };
   } catch (err) {
     console.error('braiins quote error', err);
-    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+    return {
+      usdPerPhDay: Number.POSITIVE_INFINITY,
+      totalUsd: Number.POSITIVE_INFINITY,
+      source: 'braiins',
+      baseUsdPerPhDay: Number.POSITIVE_INFINITY,
+      feeUsdPerPhDay: 0,
+      marginUsdPerPhDay: 0,
+    };
   }
 }
 
@@ -146,16 +202,38 @@ async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
   const url = process.env.INTERNAL_CAPACITY_API;
   const token = process.env.INTERNAL_CAPACITY_TOKEN;
   if (!url || !token) {
-    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'internal' };
+    return {
+      usdPerPhDay: Number.POSITIVE_INFINITY,
+      totalUsd: Number.POSITIVE_INFINITY,
+      source: 'internal',
+      baseUsdPerPhDay: Number.POSITIVE_INFINITY,
+      feeUsdPerPhDay: 0,
+      marginUsdPerPhDay: 0,
+    };
   }
   try {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error('capacity api error');
     const data: any = await res.json();
     if (typeof data.usdPerPhDay !== 'number') throw new Error('bad capacity quote');
-    return { usdPerPhDay: data.usdPerPhDay, totalUsd: data.usdPerPhDay * (input.ph * (input.hours / 24)), source: 'internal' };
+    const baseUsdPerPhDay = data.usdPerPhDay;
+    return {
+      usdPerPhDay: baseUsdPerPhDay,
+      totalUsd: baseUsdPerPhDay * (input.ph * (input.hours / 24)),
+      source: 'internal',
+      baseUsdPerPhDay,
+      feeUsdPerPhDay: 0,
+      marginUsdPerPhDay: 0,
+    };
   } catch (err) {
     console.error('internal quote error', err);
-    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'internal' };
+    return {
+      usdPerPhDay: Number.POSITIVE_INFINITY,
+      totalUsd: Number.POSITIVE_INFINITY,
+      source: 'internal',
+      baseUsdPerPhDay: Number.POSITIVE_INFINITY,
+      feeUsdPerPhDay: 0,
+      marginUsdPerPhDay: 0,
+    };
   }
 }
