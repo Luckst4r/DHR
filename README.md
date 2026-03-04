@@ -25,8 +25,7 @@ Skeleton for a Discord bot that lets users quote and rent hashrate. Pricing stub
    - Prod: `npm run build && npm start`
 
 ## TODO
-- Implement NiceHash/Braiins market quote calls
-- Lock quotes for N minutes, handle payment, and fulfill via internal proxy
-- Persist orders (SQLite/Prisma) instead of in-memory
+- Implement Braiins market quote calls
+- Payment flow (Lightning/on-chain) and fulfillment via proxy (deferred for now)
 - Add SLA tracking and under-delivery credits
-- Harden pool validation (host:port regex, allowed list)
+- Harden pool validation (host:port regex, allowed list/blocklist)

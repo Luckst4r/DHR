@@ -87,16 +87,53 @@ async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
   }
 }
 
-async function quoteBraiinshash(_input: QuoteInput): Promise<QuoteResult> {
-  const owner = process.env.BRAIINS_OWNER_TOKEN;
-  if (!owner) return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+async function quoteBraiinshash(input: QuoteInput): Promise<QuoteResult> {
+  const token = process.env.BRAIINS_READONLY_TOKEN || process.env.BRAIINS_OWNER_TOKEN;
+  if (!token) return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
   try {
-    // Placeholder: Braiins hashrate market API not wired; return Infinity until implemented.
-    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+    const settings = await braiinsSettings(token);
+    const orderbook = await braiinsOrderbook(token);
+    if (!orderbook?.asks || orderbook.asks.length === 0) throw new Error('no asks');
+    const bestPriceSat = Math.min(...orderbook.asks.map((a: any) => Number(a.price_sat)).filter((n: number) => !isNaN(n)));
+    if (!isFinite(bestPriceSat)) throw new Error('bad price');
+    const btcPrice = await btcUsd();
+    const priceBtc = bestPriceSat * 1e-8; // sats -> BTC per hr_unit
+    const usdPerHrUnit = priceBtc * btcPrice;
+    const usdPerPhDay = usdPerHrUnit * settings.hrUnitToPhDay;
+    return { usdPerPhDay, totalUsd: usdPerPhDay * (input.ph * (input.hours / 24)), source: 'braiins' };
   } catch (err) {
     console.error('braiins quote error', err);
     return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
   }
+}
+
+async function braiinsSettings(token: string): Promise<{ hrUnit: string; hrUnitToPhDay: number }> {
+  const res = await fetch('https://hashpower.braiins.com/api/v1/spot/settings', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('settings error');
+  const data: any = await res.json();
+  const hrUnit: string = data?.hr_unit ?? '';
+  const toPhDay = parseHrUnit(hrUnit);
+  if (!isFinite(toPhDay) || toPhDay <= 0) throw new Error('unknown hr_unit');
+  return { hrUnit, hrUnitToPhDay: toPhDay };
+}
+
+function parseHrUnit(unit: string): number {
+  // Convert hr_unit like "PH/day", "EH/day", "TH/day" to multiplier to PH/day
+  const u = unit.toLowerCase();
+  if (u.includes('ph/day')) return 1;
+  if (u.includes('eh/day')) return 1000;
+  if (u.includes('th/day')) return 0.001;
+  return NaN;
+}
+
+async function braiinsOrderbook(token: string): Promise<any> {
+  const res = await fetch('https://hashpower.braiins.com/api/v1/spot/orderbook', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('orderbook error');
+  return res.json();
 }
 
 async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
