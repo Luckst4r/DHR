@@ -155,7 +155,14 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const q = await quoteHashrate({ ph, hours, pool, worker });
+  let q;
+  try {
+    q = await quoteHashrate({ ph, hours, pool, worker });
+  } catch (err) {
+    await interaction.reply({ content: 'No valid quote available right now. Please retry shortly.', ephemeral: true });
+    return;
+  }
+
   const order = await createOrder({ ph, hours, pool, worker, user: interaction.user.id, totalUsd: q.totalUsd });
   const btcPrice = await btcUsd().catch(() => NaN);
   const btcDue = isFinite(btcPrice) && btcPrice > 0 ? order.totalUsd / btcPrice : NaN;

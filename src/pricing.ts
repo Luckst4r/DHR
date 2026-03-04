@@ -26,7 +26,7 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   const valid = marketQuotes
     .filter((r) => r.status === 'fulfilled')
     .map((r) => (r as PromiseFulfilledResult<QuoteResult>).value)
-    .filter((q) => !isNaN(q.usdPerPhDay));
+    .filter((q) => isFinite(q.usdPerPhDay) && isFinite(q.totalUsd));
 
   if (valid.length === 0) {
     throw new Error('No quotes available');
