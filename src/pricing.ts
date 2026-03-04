@@ -70,7 +70,12 @@ async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
     const res = await fetch('https://api2.nicehash.com/main/api/v2/hashpower/orderBook?algorithm=SHA256ASICBOOST&page=0&pageSize=10');
     if (!res.ok) throw new Error('nicehash orderBook failed');
     const data: any = await res.json();
-    const orders = data?.stats?.orders ?? data?.orderList ?? [];
+    const marketObjs = data?.stats && typeof data.stats === 'object' ? Object.values(data.stats) : [];
+    const orders = Array.isArray(data?.orderList)
+      ? data.orderList
+      : Array.isArray(marketObjs)
+        ? marketObjs.flatMap((m: any) => (m?.orders ?? []))
+        : [];
     const prices = Array.isArray(orders)
       ? orders
           .map((o: any) => Number(o.price))
