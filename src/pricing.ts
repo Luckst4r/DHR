@@ -49,7 +49,7 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   return best;
 }
 
-async function btcUsd(): Promise<number> {
+export async function btcUsd(): Promise<number> {
   const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
   if (!res.ok) throw new Error('btc price failed');
   const data: any = await res.json();

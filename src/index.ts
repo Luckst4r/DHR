@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
-import { quoteHashrate } from './pricing.js';
+import { quoteHashrate, btcUsd } from './pricing.js';
 import { createOrder, getOrderStatus, cancelOrder, markPaid } from './orders.js';
 import { validatePool } from './pools.js';
 
@@ -157,7 +157,17 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
 
   const q = await quoteHashrate({ ph, hours, pool, worker });
   const order = await createOrder({ ph, hours, pool, worker, user: interaction.user.id, totalUsd: q.totalUsd });
-  await interaction.reply({ content: `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}`, ephemeral: true });
+  const btcPrice = await btcUsd().catch(() => NaN);
+  const btcDue = isFinite(btcPrice) && btcPrice > 0 ? order.totalUsd / btcPrice : NaN;
+  const usdcAddr = process.env.PAYMENT_USDC_BASE || 'set PAYMENT_USDC_BASE';
+  const btcAddr = process.env.PAYMENT_BTC_ONCHAIN || 'set PAYMENT_BTC_ONCHAIN';
+  const lines = [
+    `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}.`,
+    `USDC (Base): ${usdcAddr} (amount: $${order.totalUsd.toFixed(2)})`,
+    `BTC on-chain: ${btcAddr}` + (isFinite(btcDue) ? ` (~${btcDue.toFixed(8)} BTC at $${btcPrice?.toFixed(2) ?? 'n/a'})` : ''),
+    `After payment, an admin will run /mark_paid <id> to activate.`
+  ];
+  await interaction.reply({ content: lines.join('\n'), ephemeral: true });
 }
 
 async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
