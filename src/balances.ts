@@ -42,7 +42,7 @@ export async function nicehashBalanceUsd(): Promise<WalletStatus> {
   if (!key || !secret || !org) return { usd: Number.POSITIVE_INFINITY, raw: null };
   const time = Date.now().toString();
   const nonce = crypto.randomUUID();
-  const path = '/main/api/v2/accounting/account2';
+  const path = '/main/api/v2/accounting/accounts2';
   const { signature, requestId, qs } = nhSign({ method: 'GET', path, query: '', body: '', time, nonce, org, key, secret });
   try {
     const res = await fetch(`https://api2.nicehash.com${path}${qs}`, {
