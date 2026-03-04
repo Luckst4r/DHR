@@ -20,10 +20,11 @@ const marginBps = Number(process.env.PRICE_MARGIN_BPS ?? '100'); // default 1%
 const floorUsdPerPhDay = Number(process.env.FLOOR_USD_PER_PH_DAY ?? '0');
 const nhFeeBps = Number(process.env.NICEHASH_FEE_BPS ?? '200'); // default 2%
 const braiinsFeeBps = Number(process.env.BRAIINS_FEE_BPS ?? '200'); // default 2%
+const disableNicehash = true; // temporarily disable NiceHash per user request
 
 export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   const marketQuotes = await Promise.allSettled([
-    quoteNicehash(input, nhFeeBps),
+    disableNicehash ? Promise.resolve(skipQuote('nicehash')) : quoteNicehash(input, nhFeeBps),
     quoteBraiinshash(input, braiinsFeeBps),
     quoteInternal(input),
   ]);
@@ -63,6 +64,17 @@ export async function btcUsd(): Promise<number> {
   const price = data?.bitcoin?.usd;
   if (typeof price !== 'number') throw new Error('btc price missing');
   return price;
+}
+
+function skipQuote(source: string): QuoteResult {
+  return {
+    usdPerPhDay: Number.POSITIVE_INFINITY,
+    totalUsd: Number.POSITIVE_INFINITY,
+    source,
+    baseUsdPerPhDay: Number.POSITIVE_INFINITY,
+    feeUsdPerPhDay: 0,
+    marginUsdPerPhDay: 0,
+  };
 }
 
 async function quoteNicehash(input: QuoteInput, feeBps: number): Promise<QuoteResult> {

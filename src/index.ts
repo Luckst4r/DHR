@@ -3,6 +3,7 @@ import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInput
 import { quoteHashrate, btcUsd } from './pricing.js';
 import { createOrder, getOrderStatus, cancelOrder, markPaid } from './orders.js';
 import { validatePool } from './pools.js';
+import { braiinsBalanceUsd } from './balances.js';
 
 const token = process.env.DISCORD_TOKEN ?? '';
 const appId = process.env.DISCORD_APP_ID ?? '';
@@ -140,6 +141,13 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   const pool = interaction.options.getString('pool', true);
   const worker = interaction.options.getString('worker', true);
 
+  // Balance gate
+  const bal = await braiinsBalanceUsd();
+  if (!isFinite(bal.usd) || bal.usd < 50) {
+    await interaction.reply({ content: 'admin needs to top up hashrate accounts. please check back later.', ephemeral: true });
+    return;
+  }
+
   const minPh = Number(process.env.MIN_PH ?? '0');
   const maxPh = Number(process.env.MAX_PH ?? '0');
   const minHours = Number(process.env.MIN_HOURS ?? '0');
@@ -179,10 +187,12 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   const btcPrice = await btcUsd().catch(() => NaN);
   const btcDue = isFinite(btcPrice) && btcPrice > 0 ? order.totalUsd / btcPrice : NaN;
   const usdcAddr = process.env.PAYMENT_USDC_BASE || 'set PAYMENT_USDC_BASE';
+  const usdcSolAddr = process.env.PAYMENT_USDC_SOL || 'set PAYMENT_USDC_SOL';
   const btcAddr = process.env.PAYMENT_BTC_ONCHAIN || 'set PAYMENT_BTC_ONCHAIN';
   const lines = [
     `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}. Source: ${q.source}.`,
     `USDC (Base): ${usdcAddr} (amount: $${order.totalUsd.toFixed(2)})`,
+    `USDC (Solana): ${usdcSolAddr} (amount: $${order.totalUsd.toFixed(2)})`,
     `BTC on-chain: ${btcAddr}` + (isFinite(btcDue) ? ` (~${btcDue.toFixed(8)} BTC at $${btcPrice?.toFixed(2) ?? 'n/a'})` : ''),
     `After payment, an admin will run /mark_paid <id> to activate.`
   ];
