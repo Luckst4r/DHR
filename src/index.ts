@@ -16,9 +16,7 @@ const commands = [
     .setName('quote')
     .setDescription('Get a hashrate quote')
     .addNumberOption((opt) => opt.setName('ph').setDescription('Petahash requested').setRequired(true))
-    .addIntegerOption((opt) => opt.setName('hours').setDescription('Duration in hours').setRequired(true))
-    .addStringOption((opt) => opt.setName('pool').setDescription('Pool URL (stratum+tcp://host:port)').setRequired(true))
-    .addStringOption((opt) => opt.setName('worker').setDescription('Worker name').setRequired(true)),
+    .addIntegerOption((opt) => opt.setName('hours').setDescription('Duration in hours').setRequired(true)),
   new SlashCommandBuilder()
     .setName('rent')
     .setDescription('Place a hashrate rental')
