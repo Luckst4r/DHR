@@ -16,10 +16,10 @@ interface QuoteResult {
   marginUsdPerPhDay: number;
 }
 
-const marginBps = Number(process.env.PRICE_MARGIN_BPS ?? '0');
+const marginBps = Number(process.env.PRICE_MARGIN_BPS ?? '100'); // default 1%
 const floorUsdPerPhDay = Number(process.env.FLOOR_USD_PER_PH_DAY ?? '0');
-const nhFeeBps = Number(process.env.NICEHASH_FEE_BPS ?? '0');
-const braiinsFeeBps = Number(process.env.BRAIINS_FEE_BPS ?? '0');
+const nhFeeBps = Number(process.env.NICEHASH_FEE_BPS ?? '200'); // default 2%
+const braiinsFeeBps = Number(process.env.BRAIINS_FEE_BPS ?? '200'); // default 2%
 
 export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   const marketQuotes = await Promise.allSettled([
