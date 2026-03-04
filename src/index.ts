@@ -3,7 +3,7 @@ import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInput
 import { quoteHashrate, btcUsd } from './pricing.js';
 import { createOrder, getOrderStatus, cancelOrder, markPaid } from './orders.js';
 import { validatePool } from './pools.js';
-import { braiinsBalanceUsd } from './balances.js';
+import { braiinsBalanceUsd, nicehashBalanceUsd } from './balances.js';
 
 const token = process.env.DISCORD_TOKEN ?? '';
 const appId = process.env.DISCORD_APP_ID ?? '';
@@ -142,8 +142,9 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   const worker = interaction.options.getString('worker', true);
 
   // Balance gate
-  const bal = await braiinsBalanceUsd();
-  if (!isFinite(bal.usd) || bal.usd < 50) {
+  const braiinsBal = await braiinsBalanceUsd();
+  const nhBal = await nicehashBalanceUsd();
+  if (!isFinite(braiinsBal.usd) || braiinsBal.usd < 50 || !isFinite(nhBal.usd) || nhBal.usd < 50) {
     await interaction.reply({ content: 'admin needs to top up hashrate accounts. please check back later.', ephemeral: true });
     return;
   }
