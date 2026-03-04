@@ -114,10 +114,17 @@ async function handleQuote(interaction: ChatInputCommandInteraction) {
   }
 
   const q = await quoteHashrate({ ph, hours, pool, worker });
-  await interaction.reply({
-    content: `Quote: ${ph} PH for ${hours}h → $${q.totalUsd.toFixed(2)} (unit: $${q.usdPerPhDay.toFixed(2)} / PH-day).`,
-    ephemeral: true,
-  });
+  const durationFactor = ph * (hours / 24);
+  const baseTotal = q.baseUsdPerPhDay * durationFactor;
+  const feeTotal = q.feeUsdPerPhDay * durationFactor;
+  const marginTotal = q.marginUsdPerPhDay * durationFactor;
+  const lines = [
+    `Quote: ${ph} PH for ${hours}h → $${q.totalUsd.toFixed(2)} (unit: $${q.usdPerPhDay.toFixed(2)} / PH-day).`,
+    `  Base: $${q.baseUsdPerPhDay.toFixed(2)} / PH-day → $${baseTotal.toFixed(2)}`,
+    `  Platform fee: $${q.feeUsdPerPhDay.toFixed(2)} / PH-day → $${feeTotal.toFixed(2)}`,
+    `  Margin: $${q.marginUsdPerPhDay.toFixed(2)} / PH-day → $${marginTotal.toFixed(2)}`,
+  ];
+  await interaction.reply({ content: lines.join('\n'), ephemeral: true });
 }
 
 async function handleRent(interaction: ChatInputCommandInteraction) {
