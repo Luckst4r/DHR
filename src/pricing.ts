@@ -82,9 +82,9 @@ async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
           .filter((n: number) => !isNaN(n))
       : [];
     if (prices.length === 0) throw new Error('no prices');
-    const bestBtcPerPhDay = Math.min(...prices); // NiceHash orderbook price is BTC per PH/day
+    const bestBtcPerEhDay = Math.min(...prices); // NiceHash orderbook price is BTC per EH/day
     const btcPrice = await btcUsd();
-    const usdPerPhDay = bestBtcPerPhDay * btcPrice;
+    const usdPerPhDay = (bestBtcPerEhDay / 1000) * btcPrice; // EH -> PH
     return { usdPerPhDay, totalUsd: usdPerPhDay * (input.ph * (input.hours / 24)), source: 'nicehash' };
   } catch (err) {
     console.error('nicehash quote error', err);
