@@ -14,9 +14,11 @@ interface QuoteResult {
   baseUsdPerPhDay: number;
   feeUsdPerPhDay: number;
   marginUsdPerPhDay: number;
+  bufferUsdPerPhDay: number;
 }
 
 const marginBps = Number(process.env.PRICE_MARGIN_BPS ?? '100'); // default 1%
+const bufferBps = Number(process.env.BETA_BUFFER_BPS ?? '1000'); // default 10%
 const floorUsdPerPhDay = Number(process.env.FLOOR_USD_PER_PH_DAY ?? '0');
 const nhFeeBps = Number(process.env.NICEHASH_FEE_BPS ?? '200'); // default 2%
 const braiinsFeeBps = Number(process.env.BRAIINS_FEE_BPS ?? '200'); // default 2%
@@ -41,10 +43,13 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   // pick cheapest
   let best = valid.reduce((a, b) => (a.usdPerPhDay <= b.usdPerPhDay ? a : b));
 
-  // apply margin and floor
+  // apply margin, buffer, and floor
   const marginMult = 1 + marginBps / 10_000;
   const marginUsdPerPhDay = best.usdPerPhDay * (marginMult - 1);
-  const adjusted = Math.max(best.usdPerPhDay * marginMult, floorUsdPerPhDay);
+  const withMargin = best.usdPerPhDay * marginMult;
+  const bufferMult = 1 + bufferBps / 10_000;
+  const bufferUsdPerPhDay = withMargin * (bufferMult - 1);
+  const adjusted = Math.max(withMargin * bufferMult, floorUsdPerPhDay);
   const totalUsd = adjusted * (input.ph * (input.hours / 24));
 
   best = {
@@ -52,6 +57,7 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
     usdPerPhDay: adjusted,
     totalUsd,
     marginUsdPerPhDay,
+    bufferUsdPerPhDay,
   };
 
   return best;
@@ -74,6 +80,7 @@ function skipQuote(source: string): QuoteResult {
     baseUsdPerPhDay: Number.POSITIVE_INFINITY,
     feeUsdPerPhDay: 0,
     marginUsdPerPhDay: 0,
+    bufferUsdPerPhDay: 0,
   };
 }
 
@@ -89,6 +96,7 @@ async function quoteNicehash(input: QuoteInput, feeBps: number): Promise<QuoteRe
       baseUsdPerPhDay: Number.POSITIVE_INFINITY,
       feeUsdPerPhDay: 0,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   }
   try {
@@ -121,6 +129,7 @@ async function quoteNicehash(input: QuoteInput, feeBps: number): Promise<QuoteRe
       baseUsdPerPhDay,
       feeUsdPerPhDay,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   } catch (err) {
     console.error('nicehash quote error', err);
@@ -131,6 +140,7 @@ async function quoteNicehash(input: QuoteInput, feeBps: number): Promise<QuoteRe
       baseUsdPerPhDay: Number.POSITIVE_INFINITY,
       feeUsdPerPhDay: 0,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   }
 }
@@ -145,6 +155,7 @@ async function quoteBraiinshash(input: QuoteInput, feeBps: number): Promise<Quot
       baseUsdPerPhDay: Number.POSITIVE_INFINITY,
       feeUsdPerPhDay: 0,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   try {
     const settings = await braiinsSettings(token);
@@ -166,6 +177,7 @@ async function quoteBraiinshash(input: QuoteInput, feeBps: number): Promise<Quot
       baseUsdPerPhDay,
       feeUsdPerPhDay,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   } catch (err) {
     console.error('braiins quote error', err);
@@ -176,6 +188,7 @@ async function quoteBraiinshash(input: QuoteInput, feeBps: number): Promise<Quot
       baseUsdPerPhDay: Number.POSITIVE_INFINITY,
       feeUsdPerPhDay: 0,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   }
 }
@@ -221,6 +234,7 @@ async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
       baseUsdPerPhDay: Number.POSITIVE_INFINITY,
       feeUsdPerPhDay: 0,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   }
   try {
@@ -236,6 +250,7 @@ async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
       baseUsdPerPhDay,
       feeUsdPerPhDay: 0,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   } catch (err) {
     console.error('internal quote error', err);
@@ -246,6 +261,7 @@ async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
       baseUsdPerPhDay: Number.POSITIVE_INFINITY,
       feeUsdPerPhDay: 0,
       marginUsdPerPhDay: 0,
+      bufferUsdPerPhDay: 0,
     };
   }
 }
