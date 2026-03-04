@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { quoteHashrate } from './pricing.js';
-import { createOrder, getOrderStatus, cancelOrder } from './orders.js';
+import { createOrder, getOrderStatus, cancelOrder, markPaid } from './orders.js';
 import { validatePool } from './pools.js';
 
 const token = process.env.DISCORD_TOKEN ?? '';
@@ -34,6 +34,10 @@ const commands = [
     .setName('cancel')
     .setDescription('Cancel a rental (if allowed)')
     .addStringOption((opt) => opt.setName('id').setDescription('Order ID').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('mark_paid')
+    .setDescription('Admin: mark order paid')
+    .addStringOption((opt) => opt.setName('id').setDescription('Order ID').setRequired(true)),
 ];
 
 async function registerCommands() {
@@ -63,6 +67,9 @@ client.on('interactionCreate', async (interaction) => {
         break;
       case 'cancel':
         await handleCancel(interaction);
+        break;
+      case 'mark_paid':
+        await handleMarkPaid(interaction);
         break;
       default:
         await interaction.reply({ content: 'Unknown command', ephemeral: true });
@@ -151,6 +158,22 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   const q = await quoteHashrate({ ph, hours, pool, worker });
   const order = await createOrder({ ph, hours, pool, worker, user: interaction.user.id, totalUsd: q.totalUsd });
   await interaction.reply({ content: `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}`, ephemeral: true });
+}
+
+async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
+  const adminIds = (process.env.ADMIN_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!adminIds.includes(interaction.user.id)) {
+    await interaction.reply({ content: 'Not authorized', ephemeral: true });
+    return;
+  }
+  const id = interaction.options.getString('id', true);
+  const msg = await markPaid(id);
+  // fulfillment stub
+  const fulfillUrl = process.env.INTERNAL_FULFILL_URL;
+  if (fulfillUrl) {
+    // TODO: call fulfill endpoint to retarget hash
+  }
+  await interaction.reply({ content: msg, ephemeral: true });
 }
 
 async function handleStatus(interaction: ChatInputCommandInteraction) {

@@ -60,3 +60,11 @@ export async function cancelOrder(id: string): Promise<string> {
   updateStatusStmt.run('canceled', id);
   return `Order ${id} canceled`;
 }
+
+export async function markPaid(id: string): Promise<string> {
+  const o = await getOrder(id);
+  if (!o) return 'Not found';
+  if (o.status !== 'payment_required' && o.status !== 'pending') return `Order ${id} not awaiting payment`;
+  updateStatusStmt.run('active', id);
+  return `Order ${id} marked paid and active`;
+}

@@ -49,6 +49,15 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   return best;
 }
 
+async function btcUsd(): Promise<number> {
+  const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+  if (!res.ok) throw new Error('btc price failed');
+  const data: any = await res.json();
+  const price = data?.bitcoin?.usd;
+  if (typeof price !== 'number') throw new Error('btc price missing');
+  return price;
+}
+
 async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
   const key = process.env.NICEHASH_API_KEY;
   const secret = process.env.NICEHASH_API_SECRET;
@@ -56,14 +65,38 @@ async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
   if (!key || !secret || !org) {
     return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'nicehash' };
   }
-  // Placeholder: implement proper NiceHash private API auth + orderbook pricing
-  // For now, return Infinity to skip until implemented
-  return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'nicehash' };
+  try {
+    // Use public orderBook for SHA256ASICBOOST; price is BTC/TH/day. Convert to USD/PH/day.
+    const res = await fetch('https://api2.nicehash.com/main/api/v2/hashpower/orderBook?algorithm=SHA256ASICBOOST&page=0&pageSize=10');
+    if (!res.ok) throw new Error('nicehash orderBook failed');
+    const data: any = await res.json();
+    const orders = data?.stats?.orders ?? data?.orderList ?? [];
+    const prices = Array.isArray(orders)
+      ? orders
+          .map((o: any) => Number(o.price))
+          .filter((n: number) => !isNaN(n))
+      : [];
+    if (prices.length === 0) throw new Error('no prices');
+    const bestBtcPerThDay = Math.min(...prices);
+    const btcPrice = await btcUsd();
+    const usdPerPhDay = bestBtcPerThDay * 1000 * btcPrice; // TH->PH
+    return { usdPerPhDay, totalUsd: usdPerPhDay * (input.ph * (input.hours / 24)), source: 'nicehash' };
+  } catch (err) {
+    console.error('nicehash quote error', err);
+    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'nicehash' };
+  }
 }
 
 async function quoteBraiinshash(_input: QuoteInput): Promise<QuoteResult> {
-  // Stub: implement Braiins Hashrate market quote
-  return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+  const owner = process.env.BRAIINS_OWNER_TOKEN;
+  if (!owner) return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+  try {
+    // Placeholder: Braiins hashrate market API not wired; return Infinity until implemented.
+    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+  } catch (err) {
+    console.error('braiins quote error', err);
+    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'braiins' };
+  }
 }
 
 async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
