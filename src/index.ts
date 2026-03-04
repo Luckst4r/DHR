@@ -120,7 +120,10 @@ async function handleQuote(interaction: ChatInputCommandInteraction) {
   const marginTotal = q.marginUsdPerPhDay * durationFactor;
   const feeBps = interaction.commandName === 'quote' ? '' : '';
   const marginBps = Number(process.env.PRICE_MARGIN_BPS ?? '100');
-  const feeLineBps = `  Platform fee: $${q.feeUsdPerPhDay.toFixed(2)} / PH-day → $${feeTotal.toFixed(2)} (bps from source)`;
+  const nhFeeBps = Number(process.env.NICEHASH_FEE_BPS ?? '200');
+  const braiinsFeeBps = Number(process.env.BRAIINS_FEE_BPS ?? '200');
+  const feePct = q.source === 'nicehash' ? nhFeeBps / 100 : q.source === 'braiins' ? braiinsFeeBps / 100 : 0;
+  const feeLineBps = `  Platform fee (${feePct.toFixed(2)}%): $${q.feeUsdPerPhDay.toFixed(2)} / PH-day → $${feeTotal.toFixed(2)}`;
   const marginLineBps = `  Margin (${(marginBps / 100).toFixed(2)}%): $${q.marginUsdPerPhDay.toFixed(2)} / PH-day → $${marginTotal.toFixed(2)}`;
   const lines = [
     `Quote: ${ph} PH for ${hours}h → $${q.totalUsd.toFixed(2)} (unit: $${q.usdPerPhDay.toFixed(2)} / PH-day).`,
