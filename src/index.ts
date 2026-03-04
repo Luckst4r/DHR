@@ -115,7 +115,7 @@ async function handleQuote(interaction: ChatInputCommandInteraction) {
 
   const q = await quoteHashrate({ ph, hours, pool, worker });
   await interaction.reply({
-    content: `Quote: ${ph} PH for ${hours}h → $${q.totalUsd.toFixed(2)} (unit: $${q.usdPerPhDay.toFixed(2)} / PH-day). Source: ${q.source}`,
+    content: `Quote: ${ph} PH for ${hours}h → $${q.totalUsd.toFixed(2)} (unit: $${q.usdPerPhDay.toFixed(2)} / PH-day).`,
     ephemeral: true,
   });
 }
@@ -167,7 +167,7 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   const usdcAddr = process.env.PAYMENT_USDC_BASE || 'set PAYMENT_USDC_BASE';
   const btcAddr = process.env.PAYMENT_BTC_ONCHAIN || 'set PAYMENT_BTC_ONCHAIN';
   const lines = [
-    `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}.`,
+    `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}. Source: ${q.source}.`,
     `USDC (Base): ${usdcAddr} (amount: $${order.totalUsd.toFixed(2)})`,
     `BTC on-chain: ${btcAddr}` + (isFinite(btcDue) ? ` (~${btcDue.toFixed(8)} BTC at $${btcPrice?.toFixed(2) ?? 'n/a'})` : ''),
     `After payment, an admin will run /mark_paid <id> to activate.`
