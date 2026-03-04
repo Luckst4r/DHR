@@ -83,8 +83,8 @@ client.on('interactionCreate', async (interaction) => {
 async function handleQuote(interaction: ChatInputCommandInteraction) {
   const ph = interaction.options.getNumber('ph', true);
   const hours = interaction.options.getInteger('hours', true);
-  const pool = interaction.options.getString('pool', true);
-  const worker = interaction.options.getString('worker', true);
+  const pool = 'stratum+tcp://example.com:3333';
+  const worker = 'quote';
 
   const minPh = Number(process.env.MIN_PH ?? '0');
   const maxPh = Number(process.env.MAX_PH ?? '0');
