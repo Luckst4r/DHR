@@ -1,0 +1,126 @@
+import 'dotenv/config';
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { quoteHashrate } from './pricing.js';
+import { createOrder, getOrderStatus, cancelOrder } from './orders.js';
+import { validatePool } from './pools.js';
+
+const token = process.env.DISCORD_TOKEN;
+const appId = process.env.DISCORD_APP_ID;
+
+if (!token || !appId) {
+  throw new Error('Missing DISCORD_TOKEN or DISCORD_APP_ID');
+}
+
+const commands = [
+  new SlashCommandBuilder()
+    .setName('quote')
+    .setDescription('Get a hashrate quote')
+    .addNumberOption((opt) => opt.setName('ph').setDescription('Petahash requested').setRequired(true))
+    .addIntegerOption((opt) => opt.setName('hours').setDescription('Duration in hours').setRequired(true))
+    .addStringOption((opt) => opt.setName('pool').setDescription('Pool URL (stratum+tcp://host:port)').setRequired(true))
+    .addStringOption((opt) => opt.setName('worker').setDescription('Worker name').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('rent')
+    .setDescription('Place a hashrate rental')
+    .addNumberOption((opt) => opt.setName('ph').setDescription('Petahash requested').setRequired(true))
+    .addIntegerOption((opt) => opt.setName('hours').setDescription('Duration in hours').setRequired(true))
+    .addStringOption((opt) => opt.setName('pool').setDescription('Pool URL').setRequired(true))
+    .addStringOption((opt) => opt.setName('worker').setDescription('Worker name').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('status')
+    .setDescription('Check rental status')
+    .addStringOption((opt) => opt.setName('id').setDescription('Order ID').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('cancel')
+    .setDescription('Cancel a rental (if allowed)')
+    .addStringOption((opt) => opt.setName('id').setDescription('Order ID').setRequired(true)),
+];
+
+async function registerCommands() {
+  const rest = new REST({ version: '10' }).setToken(token);
+  await rest.put(Routes.applicationCommands(appId), { body: commands.map((c) => c.toJSON()) });
+  console.log('Slash commands registered');
+}
+
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+client.on('ready', () => {
+  console.log(`Logged in as ${client.user?.tag}`);
+});
+
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  try {
+    switch (interaction.commandName) {
+      case 'quote':
+        await handleQuote(interaction);
+        break;
+      case 'rent':
+        await handleRent(interaction);
+        break;
+      case 'status':
+        await handleStatus(interaction);
+        break;
+      case 'cancel':
+        await handleCancel(interaction);
+        break;
+      default:
+        await interaction.reply({ content: 'Unknown command', ephemeral: true });
+    }
+  } catch (err) {
+    console.error(err);
+    if (interaction.isRepliable()) {
+      await interaction.reply({ content: 'Error processing request', ephemeral: true }).catch(() => {});
+    }
+  }
+});
+
+async function handleQuote(interaction: ChatInputCommandInteraction) {
+  const ph = interaction.options.getNumber('ph', true);
+  const hours = interaction.options.getInteger('hours', true);
+  const pool = interaction.options.getString('pool', true);
+  const worker = interaction.options.getString('worker', true);
+
+  const poolOk = validatePool(pool);
+  if (!poolOk.valid) {
+    await interaction.reply({ content: `Pool not allowed: ${poolOk.reason}`, ephemeral: true });
+    return;
+  }
+
+  const q = await quoteHashrate({ ph, hours, pool, worker });
+  await interaction.reply({
+    content: `Quote: ${ph} PH for ${hours}h → $${q.totalUsd.toFixed(2)} (unit: $${q.usdPerPhDay.toFixed(2)} / PH-day). Source: ${q.source}`,
+    ephemeral: true,
+  });
+}
+
+async function handleRent(interaction: ChatInputCommandInteraction) {
+  const ph = interaction.options.getNumber('ph', true);
+  const hours = interaction.options.getInteger('hours', true);
+  const pool = interaction.options.getString('pool', true);
+  const worker = interaction.options.getString('worker', true);
+
+  const poolOk = validatePool(pool);
+  if (!poolOk.valid) {
+    await interaction.reply({ content: `Pool not allowed: ${poolOk.reason}`, ephemeral: true });
+    return;
+  }
+
+  const order = await createOrder({ ph, hours, pool, worker, user: interaction.user.id });
+  await interaction.reply({ content: `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}`, ephemeral: true });
+}
+
+async function handleStatus(interaction: ChatInputCommandInteraction) {
+  const id = interaction.options.getString('id', true);
+  const status = await getOrderStatus(id);
+  await interaction.reply({ content: status, ephemeral: true });
+}
+
+async function handleCancel(interaction: ChatInputCommandInteraction) {
+  const id = interaction.options.getString('id', true);
+  const res = await cancelOrder(id);
+  await interaction.reply({ content: res, ephemeral: true });
+}
+
+await registerCommands();
+await client.login(token);
