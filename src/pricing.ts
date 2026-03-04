@@ -49,9 +49,15 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   return best;
 }
 
-async function quoteNicehash(_input: QuoteInput): Promise<QuoteResult> {
-  // Stub: implement NiceHash API call with key/secret/org
-  // Return NaN if unavailable
+async function quoteNicehash(input: QuoteInput): Promise<QuoteResult> {
+  const key = process.env.NICEHASH_API_KEY;
+  const secret = process.env.NICEHASH_API_SECRET;
+  const org = process.env.NICEHASH_ORG_ID;
+  if (!key || !secret || !org) {
+    return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'nicehash' };
+  }
+  // Placeholder: implement proper NiceHash private API auth + orderbook pricing
+  // For now, return Infinity to skip until implemented
   return { usdPerPhDay: Number.POSITIVE_INFINITY, totalUsd: Number.POSITIVE_INFINITY, source: 'nicehash' };
 }
 
@@ -70,7 +76,7 @@ async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
   try {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error('capacity api error');
-    const data = await res.json();
+    const data: any = await res.json();
     if (typeof data.usdPerPhDay !== 'number') throw new Error('bad capacity quote');
     return { usdPerPhDay: data.usdPerPhDay, totalUsd: data.usdPerPhDay * (input.ph * (input.hours / 24)), source: 'internal' };
   } catch (err) {

@@ -4,8 +4,8 @@ import { quoteHashrate } from './pricing.js';
 import { createOrder, getOrderStatus, cancelOrder } from './orders.js';
 import { validatePool } from './pools.js';
 
-const token = process.env.DISCORD_TOKEN;
-const appId = process.env.DISCORD_APP_ID;
+const token = process.env.DISCORD_TOKEN ?? '';
+const appId = process.env.DISCORD_APP_ID ?? '';
 
 if (!token || !appId) {
   throw new Error('Missing DISCORD_TOKEN or DISCORD_APP_ID');
@@ -81,6 +81,27 @@ async function handleQuote(interaction: ChatInputCommandInteraction) {
   const pool = interaction.options.getString('pool', true);
   const worker = interaction.options.getString('worker', true);
 
+  const minPh = Number(process.env.MIN_PH ?? '0');
+  const maxPh = Number(process.env.MAX_PH ?? '0');
+  const minHours = Number(process.env.MIN_HOURS ?? '0');
+  const maxHours = Number(process.env.MAX_HOURS ?? '0');
+  if (minPh > 0 && ph < minPh) {
+    await interaction.reply({ content: `Minimum size is ${minPh} PH`, ephemeral: true });
+    return;
+  }
+  if (maxPh > 0 && ph > maxPh) {
+    await interaction.reply({ content: `Maximum size is ${maxPh} PH`, ephemeral: true });
+    return;
+  }
+  if (minHours > 0 && hours < minHours) {
+    await interaction.reply({ content: `Minimum duration is ${minHours} hours`, ephemeral: true });
+    return;
+  }
+  if (maxHours > 0 && hours > maxHours) {
+    await interaction.reply({ content: `Maximum duration is ${maxHours} hours`, ephemeral: true });
+    return;
+  }
+
   const poolOk = validatePool(pool);
   if (!poolOk.valid) {
     await interaction.reply({ content: `Pool not allowed: ${poolOk.reason}`, ephemeral: true });
@@ -100,13 +121,35 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   const pool = interaction.options.getString('pool', true);
   const worker = interaction.options.getString('worker', true);
 
+  const minPh = Number(process.env.MIN_PH ?? '0');
+  const maxPh = Number(process.env.MAX_PH ?? '0');
+  const minHours = Number(process.env.MIN_HOURS ?? '0');
+  const maxHours = Number(process.env.MAX_HOURS ?? '0');
+  if (minPh > 0 && ph < minPh) {
+    await interaction.reply({ content: `Minimum size is ${minPh} PH`, ephemeral: true });
+    return;
+  }
+  if (maxPh > 0 && ph > maxPh) {
+    await interaction.reply({ content: `Maximum size is ${maxPh} PH`, ephemeral: true });
+    return;
+  }
+  if (minHours > 0 && hours < minHours) {
+    await interaction.reply({ content: `Minimum duration is ${minHours} hours`, ephemeral: true });
+    return;
+  }
+  if (maxHours > 0 && hours > maxHours) {
+    await interaction.reply({ content: `Maximum duration is ${maxHours} hours`, ephemeral: true });
+    return;
+  }
+
   const poolOk = validatePool(pool);
   if (!poolOk.valid) {
     await interaction.reply({ content: `Pool not allowed: ${poolOk.reason}`, ephemeral: true });
     return;
   }
 
-  const order = await createOrder({ ph, hours, pool, worker, user: interaction.user.id });
+  const q = await quoteHashrate({ ph, hours, pool, worker });
+  const order = await createOrder({ ph, hours, pool, worker, user: interaction.user.id, totalUsd: q.totalUsd });
   await interaction.reply({ content: `Order ${order.id} accepted. Paying: $${order.totalUsd.toFixed(2)}. Status: ${order.status}`, ephemeral: true });
 }
 
@@ -122,5 +165,11 @@ async function handleCancel(interaction: ChatInputCommandInteraction) {
   await interaction.reply({ content: res, ephemeral: true });
 }
 
-await registerCommands();
-await client.login(token);
+async function start() {
+  await registerCommands();
+  await client.login(token);
+}
+
+start().catch((err) => {
+  console.error('Bot start failed', err);
+});
