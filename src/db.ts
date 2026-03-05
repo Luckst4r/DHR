@@ -21,8 +21,30 @@ CREATE TABLE IF NOT EXISTS orders (
   user TEXT NOT NULL,
   status TEXT NOT NULL,
   totalUsd REAL NOT NULL,
-  createdAt INTEGER NOT NULL
+  createdAt INTEGER NOT NULL,
+  nhOrderId TEXT,
+  nhMarket TEXT,
+  nhPrice REAL,
+  nhLimit REAL,
+  nhAmount REAL,
+  expiresAt INTEGER
 )
 `).run();
+
+const upgradeCols = [
+  ['nhOrderId', 'TEXT'],
+  ['nhMarket', 'TEXT'],
+  ['nhPrice', 'REAL'],
+  ['nhLimit', 'REAL'],
+  ['nhAmount', 'REAL'],
+  ['expiresAt', 'INTEGER'],
+];
+for (const [col, type] of upgradeCols) {
+  try {
+    db.prepare(`ALTER TABLE orders ADD COLUMN ${col} ${type}`).run();
+  } catch (_) {
+    // ignore if already exists
+  }
+}
 
 export { db };

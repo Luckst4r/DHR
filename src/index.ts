@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { quoteHashrate, btcUsd } from './pricing.js';
-import { createOrder, getOrderStatus, cancelOrder, markPaid, getOrder } from './orders.js';
+import { createOrder, getOrderStatus, cancelOrder, markPaid, getOrder, saveNhInfo, updateExpiry } from './orders.js';
 import { validatePool } from './pools.js';
 import { braiinsBalanceUsd, nicehashBalanceUsd } from './balances.js';
 import { createNhOrder, cancelNhOrder } from './nhOrder.js';
@@ -218,6 +218,9 @@ async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
     if (o) {
       const usdPerPhDay = await latestUsdPerPhDay(o);
       const nh = await createNhOrder({ ph: o.ph, hours: o.hours, poolUrl: o.pool, worker: o.worker, usdPerPhDay });
+      await saveNhInfo(id, { nhOrderId: nh.id, nhMarket: nh.market, nhPrice: nh.price, nhLimit: nh.limit, nhAmount: nh.amount });
+      const expiresAt = Date.now() + o.hours * 3600 * 1000;
+      await updateExpiry(id, expiresAt);
       extra = `\nNiceHash order placed: ${nh.id} (market ${nh.market}, price ${nh.price.toFixed(8)} BTC/EH/day, limit ${nh.limit.toFixed(6)} EH/s).`; // ephemeral log
       // schedule cancel at expiry
       const ms = o.hours * 3600 * 1000;

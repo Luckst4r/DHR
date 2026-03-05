@@ -25,21 +25,31 @@ export interface Order {
 }
 
 const insertStmt = db.prepare(
-  'INSERT INTO orders (id, ph, hours, pool, worker, user, status, totalUsd, createdAt) VALUES (@id,@ph,@hours,@pool,@worker,@user,@status,@totalUsd,@createdAt)'
+  'INSERT INTO orders (id, ph, hours, pool, worker, user, status, totalUsd, createdAt, nhOrderId, nhMarket, nhPrice, nhLimit, nhAmount, expiresAt) VALUES (@id,@ph,@hours,@pool,@worker,@user,@status,@totalUsd,@createdAt,@nhOrderId,@nhMarket,@nhPrice,@nhLimit,@nhAmount,@expiresAt)'
 );
 const getStmt = db.prepare('SELECT * FROM orders WHERE id = ?');
 const updateStatusStmt = db.prepare('UPDATE orders SET status = ? WHERE id = ?');
+const updateNhStmt = db.prepare('UPDATE orders SET nhOrderId=?, nhMarket=?, nhPrice=?, nhLimit=?, nhAmount=? WHERE id=?');
+const updateExpiresStmt = db.prepare('UPDATE orders SET expiresAt=? WHERE id=?');
 
 export async function createOrder(input: OrderInput): Promise<Order> {
   const id = crypto.randomUUID();
-  const order: Order = {
+  const now = Date.now();
+  const expiresAt = now + input.hours * 3600 * 1000;
+  const order: any = {
     id,
     status: 'payment_required',
-    createdAt: Date.now(),
+    createdAt: now,
+    nhOrderId: null,
+    nhMarket: null,
+    nhPrice: null,
+    nhLimit: null,
+    nhAmount: null,
+    expiresAt,
     ...input,
   };
-  insertStmt.run(order as any);
-  return order;
+  insertStmt.run(order);
+  return order as Order;
 }
 
 export async function getOrder(id: string): Promise<Order | undefined> {
@@ -67,4 +77,12 @@ export async function markPaid(id: string): Promise<string> {
   if (o.status !== 'payment_required' && o.status !== 'pending') return `Order ${id} not awaiting payment`;
   updateStatusStmt.run('active', id);
   return `Order ${id} marked paid and active`;
+}
+
+export async function saveNhInfo(id: string, info: { nhOrderId: string; nhMarket: string; nhPrice: number; nhLimit: number; nhAmount: number }) {
+  updateNhStmt.run(info.nhOrderId, info.nhMarket, info.nhPrice, info.nhLimit, info.nhAmount, id);
+}
+
+export async function updateExpiry(id: string, expiresAt: number) {
+  updateExpiresStmt.run(expiresAt, id);
 }
