@@ -81,14 +81,47 @@ export function buildBraiinsOrderParams(opts: {
   return { priceSatPerUnit, limitUnit, amountBtc };
 }
 
-// Placeholder for creating a Braiins spot order (needs confirmed endpoint/payload)
-export async function createBraiinsOrder(_opts: {
+export async function createBraiinsOrder(opts: {
   ph: number;
   hours: number;
   poolUrl: string;
   worker: string;
   usdPerPhDay: number;
   token: string;
-}): Promise<{ id: string }> {
-  throw new Error('Braiins order placement endpoint/payload not implemented yet');
+  memo?: string;
+}): Promise<{ id: string; cl_order_id?: string }> {
+  const { ph, hours, poolUrl, worker, usdPerPhDay, token, memo = 'auto' } = opts;
+  const settings = await getBraiinsSettings(token);
+  const ob = await getBraiinsOrderbook(token);
+  const btcPrice = Number(process.env.BTC_USD_OVERRIDE) || (await (await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')).json() as any).bitcoin.usd;
+  const params = buildBraiinsOrderParams({ ph, hours, usdPerPhDay, settings, orderbook: ob, btcUsd: btcPrice });
+
+  const parsed = new URL(poolUrl.replace('stratum+tcp://', 'tcp://').replace('stratum+ssl://', 'ssl://'));
+  const body = {
+    cl_order_id: crypto.randomUUID(),
+    dest_upstream: {
+      url: `${parsed.protocol.replace(':', '')}://${parsed.hostname}:${parsed.port || 3333}`,
+      identity: worker,
+    },
+    speed_limit_ph: ph,
+    amount_sat: params.amountBtc * 1e8,
+    price_sat: params.priceSatPerUnit,
+    memo,
+  };
+
+  const res = await fetch('https://hashpower.braiins.com/api/v1/spot/place-bid', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`braiins order create http ${res.status} body=${txt}`);
+  }
+  const data: any = await res.json();
+  if (!data?.id) throw new Error('braiins order create missing id');
+  return { id: data.id, cl_order_id: data.cl_order_id };
 }
