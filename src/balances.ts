@@ -1,6 +1,14 @@
 import fetch from 'node-fetch';
-import crypto from 'node:crypto';
 import { btcUsd } from './pricing.js';
+import NHApi from 'nicehash-api-wrapper-v2';
+
+function getNhClient() {
+  const apiKey = process.env.NICEHASH_API_KEY;
+  const apiSecret = process.env.NICEHASH_API_SECRET;
+  const org = process.env.NICEHASH_ORG_ID;
+  if (!apiKey || !apiSecret || !org) throw new Error('Missing NiceHash credentials');
+  return new NHApi({ apiKey, apiSecret, orgId: org });
+}
 
 export interface WalletStatus {
   usd: number;
@@ -26,44 +34,14 @@ export async function braiinsBalanceUsd(): Promise<WalletStatus> {
   }
 }
 
-function nhSign({ method, path, query = '', body = '', time, nonce, org, key, secret }: any) {
-  const qs = query ? `?${query}` : '';
-  const requestId = crypto.randomUUID();
-  const msg = `${time}${nonce}${org}${requestId}${method.toUpperCase()}${path}${qs}${body}`;
-  const hmac = crypto.createHmac('sha256', secret).update(msg).digest('hex');
-  return { signature: `${key}:${hmac}`, requestId, qs };
-}
-
 export async function nicehashBalanceUsd(): Promise<WalletStatus> {
-  const key = process.env.NICEHASH_API_KEY;
-  const secret = process.env.NICEHASH_API_SECRET;
-  const org = process.env.NICEHASH_ORG_ID;
   const overrideBtc = process.env.NICEHASH_BAL_OVERRIDE_BTC ? Number(process.env.NICEHASH_BAL_OVERRIDE_BTC) : undefined;
-  if (!key || !secret || !org) return { usd: Number.POSITIVE_INFINITY, raw: null };
-  const time = Date.now().toString();
-  const nonce = crypto.randomUUID();
-  const path = '/main/api/v2/accounting/accounts2';
-  const { signature, requestId, qs } = nhSign({ method: 'GET', path, query: '', body: '', time, nonce, org, key, secret });
   try {
-    const res = await fetch(`https://api2.nicehash.com${path}${qs}`, {
-      method: 'GET',
-      headers: {
-        'X-Time': time,
-        'X-Nonce': nonce,
-        'X-Organization-Id': org,
-        'X-Request-Id': requestId,
-        'X-Auth': signature,
-        'X-User-Agent': 'HashRentalBot',
-      },
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`nicehash balance http ${res.status} body=${txt}`);
-    }
-    const data: any = await res.json();
-    const list = data?.data ?? data?.wallets ?? [];
+    const nh = getNhClient();
+    const data: any = await nh.Accounting.getBalance();
+    const list = data?.balances ?? data?.data ?? data?.wallets ?? [];
     const btcEntry = Array.isArray(list) ? list.find((w: any) => (w?.currency || w?.asset)?.toUpperCase() === 'BTC') : undefined;
-    const btcAvail = Number(btcEntry?.available?.total || btcEntry?.available?.quantity || btcEntry?.available || 0);
+    const btcAvail = Number(btcEntry?.available || btcEntry?.availableAmount || btcEntry?.available?.total || btcEntry?.available?.quantity || 0);
     const btc = isFinite(btcAvail) ? btcAvail : 0;
     const usd = btc * (await btcUsd());
     return { usd, raw: data };
@@ -71,7 +49,7 @@ export async function nicehashBalanceUsd(): Promise<WalletStatus> {
     console.error('nicehash balance error', err);
     if (overrideBtc && isFinite(overrideBtc)) {
       const usd = overrideBtc * (await btcUsd());
-      return { usd, raw: { override: true, btc: overrideBtc } };
+      return { usd, raw: { override: true, btc: overrideBtc, error: (err as Error).message } };
     }
     return { usd: Number.POSITIVE_INFINITY, raw: { error: (err as Error).message } };
   }

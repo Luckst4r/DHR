@@ -1,4 +1,13 @@
 import fetch from 'node-fetch';
+import NHApi from 'nicehash-api-wrapper-v2';
+
+function getNhClient() {
+  const apiKey = process.env.NICEHASH_API_KEY;
+  const apiSecret = process.env.NICEHASH_API_SECRET;
+  const org = process.env.NICEHASH_ORG_ID;
+  if (!apiKey || !apiSecret || !org) throw new Error('Missing NiceHash credentials');
+  return new NHApi({ apiKey, apiSecret, orgId: org });
+}
 
 export interface NhMarketInfo {
   market: string;
@@ -74,12 +83,8 @@ function algoCode(a: any): string {
 }
 
 export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<NhBuyInfo> {
-  const res = await fetch('https://api2.nicehash.com/main/api/v2/public/buy/info');
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`buy/info http ${res.status} body=${txt}`);
-  }
-  const data: any = await res.json();
+  const nh = getNhClient();
+  const data: any = await nh.HashPower.getBuyInfo();
   const algos: any[] = data?.algorithms ?? data?.miningAlgorithms ?? [];
   const entry = algos.find((a) => algoCode(a).toUpperCase() === algo.toUpperCase());
   if (!entry) throw new Error(`algo ${algo} not found in buy/info`);
@@ -114,12 +119,17 @@ export async function fetchOrderbook(algo: string, market: string): Promise<numb
 }
 
 export async function getNhBestMarketPrice(algo: string = 'SHA256ASICBOOST'): Promise<{ market: string; btcPerEhDay: number }> {
+  const nh = getNhClient();
+  const ob: any = await nh.HashPower.getOrderBook(algo, 50, 0);
   const markets = ['USA', 'EU'];
-  const results = await Promise.allSettled(markets.map((m) => fetchOrderbook(algo, m)));
   const priced: { market: string; btcPerEhDay: number }[] = [];
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled' && isFinite(r.value)) priced.push({ market: markets[i], btcPerEhDay: r.value });
-  });
+  for (const m of markets) {
+    const orders = ob?.stats?.[m]?.orders;
+    if (Array.isArray(orders) && orders.length) {
+      const prices = orders.map((o: any) => Number(o.price)).filter((n: number) => !isNaN(n));
+      if (prices.length) priced.push({ market: m, btcPerEhDay: Math.min(...prices) });
+    }
+  }
   if (!priced.length) throw new Error('No market prices available');
   priced.sort((a, b) => a.btcPerEhDay - b.btcPerEhDay);
   return priced[0];
