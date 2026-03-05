@@ -41,3 +41,30 @@ export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<Nh
   }));
   return { algo: entry.algorithm || entry.algo, markets, raw: data };
 }
+
+async function fetchOrderbook(algo: string, market: string): Promise<number> {
+  const url = `https://api2.nicehash.com/main/api/v2/hashpower/orderBook?algorithm=${encodeURIComponent(algo)}&market=${market}&page=0&pageSize=50`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`orderBook ${market} http ${res.status}`);
+  const data: any = await res.json();
+  const orders = data?.stats?.orders ?? data?.orderList ?? [];
+  const prices = Array.isArray(orders)
+    ? orders
+        .map((o: any) => Number(o.price))
+        .filter((n: number) => !isNaN(n))
+    : [];
+  if (!prices.length) throw new Error(`orderBook ${market} no prices`);
+  return Math.min(...prices); // BTC per EH/day
+}
+
+export async function getNhBestMarketPrice(algo: string = 'SHA256ASICBOOST'): Promise<{ market: string; btcPerEhDay: number }> {
+  const markets = ['EU', 'USA'];
+  const results = await Promise.allSettled(markets.map((m) => fetchOrderbook(algo, m)));
+  const priced: { market: string; btcPerEhDay: number }[] = [];
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled' && isFinite(r.value)) priced.push({ market: markets[i], btcPerEhDay: r.value });
+  });
+  if (!priced.length) throw new Error('No market prices available');
+  priced.sort((a, b) => a.btcPerEhDay - b.btcPerEhDay);
+  return priced[0];
+}
