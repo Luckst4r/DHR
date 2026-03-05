@@ -148,7 +148,8 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   // Balance gate
   const braiinsBal = await braiinsBalanceUsd();
   const nhBal = await nicehashBalanceUsd();
-  if (!isFinite(braiinsBal.usd) || braiinsBal.usd < 50 || !isFinite(nhBal.usd) || nhBal.usd < 50) {
+  const nhGate = (process.env.NICEHASH_GATE_ENABLED ?? 'true').toLowerCase() !== 'false';
+  if (!isFinite(braiinsBal.usd) || braiinsBal.usd < 50 || (nhGate && (!isFinite(nhBal.usd) || nhBal.usd < 50))) {
     await interaction.reply({ content: 'admin needs to top up hashrate accounts. please check back later.', ephemeral: true });
     return;
   }
