@@ -1,3 +1,4 @@
+// balances.ts — balance checks for Braiins and NiceHash (gates /rent). Uses NH wrapper; Braiins via address balance. Supports override envs.
 import fetch from 'node-fetch';
 import { btcUsd } from './pricing.js';
 import NHApi from 'nicehash-api-wrapper-v2';
@@ -15,6 +16,7 @@ export interface WalletStatus {
   raw: any;
 }
 
+// Braiins: use on-chain BTC address from env, convert to USD.
 const BRAIINS_BTC_ADDRESS = process.env.BRAIINS_BTC_ADDRESS || 'bc1qd7ghrtr0wc9xz3phn93gue8s0p9hxdgyt8htuj';
 
 export async function braiinsBalanceUsd(): Promise<WalletStatus> {
@@ -34,6 +36,7 @@ export async function braiinsBalanceUsd(): Promise<WalletStatus> {
   }
 }
 
+// NiceHash: use wrapper Accounting.getBalance; supports override for gating.
 export async function nicehashBalanceUsd(): Promise<WalletStatus> {
   const overrideBtc = process.env.NICEHASH_BAL_OVERRIDE_BTC ? Number(process.env.NICEHASH_BAL_OVERRIDE_BTC) : undefined;
   if (overrideBtc && isFinite(overrideBtc)) {
