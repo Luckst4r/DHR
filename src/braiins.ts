@@ -25,25 +25,17 @@ function parseHrUnit(unit: string): number {
   return NaN;
 }
 
-const BRAIINS_BASE = process.env.BRAIINS_BASE || 'https://hashpower.braiins.com/api';
+const BRAIINS_BASE = process.env.BRAIINS_BASE || 'https://hashpower.braiins.com/api/v1';
 
-async function fetchJsonWithFallback(path1: string, path2: string | null, token: string): Promise<any> {
+async function fetchJson(path: string, token: string): Promise<any> {
   const headers = { Authorization: `Bearer ${token}` } as any;
-  const attempt = async (path: string) => {
-    const res = await fetch(`${BRAIINS_BASE}${path}`, { headers });
-    if (!res.ok) throw new Error(`http ${res.status}`);
-    return res.json();
-  };
-  try {
-    return await attempt(path1);
-  } catch (err) {
-    if (path2) return await attempt(path2);
-    throw err;
-  }
+  const res = await fetch(`${BRAIINS_BASE}${path}`, { headers });
+  if (!res.ok) throw new Error(`http ${res.status}`);
+  return res.json();
 }
 
 export async function getBraiinsSettings(token: string): Promise<BraiinsSettings> {
-  const data: any = await fetchJsonWithFallback('/spot/settings', '/v1/spot/settings', token);
+  const data: any = await fetchJson('/spot/settings', token);
   const hrUnit: string = data?.hr_unit ?? '';
   const hrUnitToPhDay = parseHrUnit(hrUnit);
   if (!isFinite(hrUnitToPhDay) || hrUnitToPhDay <= 0) throw new Error('braiins hr_unit unknown');
@@ -51,7 +43,7 @@ export async function getBraiinsSettings(token: string): Promise<BraiinsSettings
 }
 
 export async function getBraiinsOrderbook(token: string): Promise<BraiinsOrderbook> {
-  const data: any = await fetchJsonWithFallback('/spot/orderbook', '/v1/spot/orderbook', token);
+  const data: any = await fetchJson('/spot/orderbook', token);
   const asks = Array.isArray(data?.asks) ? data.asks.map((a: any) => ({ price_sat: Number(a.price_sat) })) : [];
   return { asks, raw: data };
 }
@@ -118,29 +110,19 @@ export async function createBraiinsOrder(opts: {
     memo,
   };
 
-  const attempt = async (path: string) => {
-    const res = await fetch(`${BRAIINS_BASE}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`braiins order create http ${res.status} body=${txt}`);
-    }
-    return res.json();
-  };
-
-  let data: any;
-  try {
-    data = await attempt('/spot/bid');
-  } catch (err) {
-    data = await attempt('/v1/spot/place-bid');
+  const res = await fetch(`${BRAIINS_BASE}/spot/bid`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`braiins order create http ${res.status} body=${txt}`);
   }
-
+  const data: any = await res.json();
   if (!data?.id) throw new Error('braiins order create missing id');
   return { id: data.id, cl_order_id: data.cl_order_id };
 }
