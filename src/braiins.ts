@@ -80,3 +80,15 @@ export function buildBraiinsOrderParams(opts: {
 
   return { priceSatPerUnit, limitUnit, amountBtc };
 }
+
+// Placeholder for creating a Braiins spot order (needs confirmed endpoint/payload)
+export async function createBraiinsOrder(_opts: {
+  ph: number;
+  hours: number;
+  poolUrl: string;
+  worker: string;
+  usdPerPhDay: number;
+  token: string;
+}): Promise<{ id: string }> {
+  throw new Error('Braiins order placement endpoint/payload not implemented yet');
+}
