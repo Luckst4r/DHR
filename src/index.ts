@@ -211,28 +211,35 @@ async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
     return;
   }
   const id = interaction.options.getString('id', true);
-  const msg = await markPaid(id);
   let extra = '';
   try {
     const o = await getOrder(id);
-    if (o) {
-      const usdPerPhDay = await latestUsdPerPhDay(o);
-      const nh = await createNhOrder({ ph: o.ph, hours: o.hours, poolUrl: o.pool, worker: o.worker, usdPerPhDay });
-      await saveNhInfo(id, { nhOrderId: nh.id, nhMarket: nh.market, nhPrice: nh.price, nhLimit: nh.limit, nhAmount: nh.amount });
-      const expiresAt = Date.now() + o.hours * 3600 * 1000;
-      await updateExpiry(id, expiresAt);
-      extra = `\nNiceHash order placed: ${nh.id} (market ${nh.market}, price ${nh.price.toFixed(8)} BTC/EH/day, limit ${nh.limit.toFixed(6)} EH/s).`; // ephemeral log
-      // schedule cancel at expiry
-      const ms = o.hours * 3600 * 1000;
-      setTimeout(() => {
-        cancelNhOrder(nh.id).catch((err) => console.error('cancel NH order failed', err));
-      }, ms);
+    if (!o) {
+      await interaction.reply({ content: 'Not found', ephemeral: true });
+      return;
     }
+    if (o.status !== 'payment_required' && o.status !== 'pending') {
+      await interaction.reply({ content: `Order ${id} not awaiting payment`, ephemeral: true });
+      return;
+    }
+    const usdPerPhDay = await latestUsdPerPhDay(o);
+    const nh = await createNhOrder({ ph: o.ph, hours: o.hours, poolUrl: o.pool, worker: o.worker, usdPerPhDay });
+    await saveNhInfo(id, { nhOrderId: nh.id, nhMarket: nh.market, nhPrice: nh.price, nhLimit: nh.limit, nhAmount: nh.amount });
+    const expiresAt = Date.now() + o.hours * 3600 * 1000;
+    await updateExpiry(id, expiresAt);
+    const msg = await markPaid(id);
+    extra = `\nNiceHash order placed: ${nh.id} (market ${nh.market}, price ${nh.price.toFixed(8)} BTC/EH/day, limit ${nh.limit.toFixed(6)} EH/s).`; // ephemeral log
+    // schedule cancel at expiry
+    const ms = o.hours * 3600 * 1000;
+    setTimeout(() => {
+      cancelNhOrder(nh.id).catch((err) => console.error('cancel NH order failed', err));
+    }, ms);
+    await interaction.reply({ content: msg + extra, ephemeral: true });
   } catch (err) {
     console.error('fulfillment error', err);
-    extra = '\n(Fulfillment error: ' + (err as Error).message + ')';
+    const msg = `Fulfillment error: ${(err as Error).message}`;
+    await interaction.reply({ content: msg, ephemeral: true });
   }
-  await interaction.reply({ content: msg + extra, ephemeral: true });
 }
 
 async function latestUsdPerPhDay(o: { ph: number; hours: number; pool: string; worker: string }): Promise<number> {

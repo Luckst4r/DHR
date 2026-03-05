@@ -92,7 +92,7 @@ export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<Nh
   return { algo: entryAlgo, markets, raw: data };
 }
 
-async function fetchOrderbook(algo: string, market: string): Promise<number> {
+export async function fetchOrderbook(algo: string, market: string): Promise<number> {
   const url = `https://api2.nicehash.com/main/api/v2/hashpower/orderBook?algorithm=${encodeURIComponent(algo)}&market=${market}&page=0&pageSize=50`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`orderBook ${market} http ${res.status}`);
@@ -114,7 +114,12 @@ export async function getNhBestMarketPrice(algo: string = 'SHA256ASICBOOST'): Pr
   results.forEach((r, i) => {
     if (r.status === 'fulfilled' && isFinite(r.value)) priced.push({ market: markets[i], btcPerEhDay: r.value });
   });
-  if (!priced.length) throw new Error('No market prices available');
+  if (!priced.length) {
+    // fallback: try USA only
+    const v = await fetchOrderbook(algo, 'USA');
+    if (isFinite(v)) return { market: 'USA', btcPerEhDay: v };
+    throw new Error('No market prices available');
+  }
   priced.sort((a, b) => a.btcPerEhDay - b.btcPerEhDay);
   return priced[0];
 }
