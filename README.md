@@ -14,6 +14,7 @@
 - NiceHash fallback: buy/info sometimes misses USA; fallback now forces a matched market or the first market, but needs testing; NH auth can still hiccup (override exists for gating).
 - Order cancel timers are in-memory; on bot restart, scheduled cancels won’t fire (needs persistent scheduler/cron).
 - Concurrent rentals: not isolated; timers/fulfillment could overlap; needs queueing or per-order tracking.
+- MiningRigRentals integration: not yet integrated; consider adding as provider/fallback.
 
 ## Commands (current)
 - `/quote ph:<number> hours:<int>` — price with breakdown (base/fee/margin/buffer).
