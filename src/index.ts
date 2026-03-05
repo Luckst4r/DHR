@@ -1,9 +1,10 @@
-// Discord bot entrypoint: handles slash commands (/quote, /rent, /status, /cancel, /mark_paid).
-// - /quote: price with fee/margin/buffer breakdown; no pool/worker required.
-// - /rent: validates size/duration/pool, checks balances, locks quote, returns payment instructions.
-// - /mark_paid: admin-only; tries Braiins order first, falls back to NiceHash; stores order metadata + expiry.
-// - Balance gates: Braiins always; NiceHash optional via env toggle/override.
-// - Payment methods: USDC (Base), USDC (Solana), BTC.
+// index.ts — Discord bot main:
+// - Registers slash commands (/quote, /rent, /status, /cancel, /mark_paid).
+// - /quote: get price with base/fee/margin/buffer (no pool/worker needed).
+// - /rent: validate inputs, check balances, lock quote, return payment methods.
+// - /mark_paid (admin): try Braiins order first, fallback to NiceHash; persist order metadata + expiry.
+// - Balance gates: Braiins always; NiceHash gate optional via env/override.
+// - Payments: USDC (Base), USDC (Solana), BTC.
 import 'dotenv/config';
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { quoteHashrate, btcUsd } from './pricing.js';
