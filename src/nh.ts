@@ -108,18 +108,13 @@ export async function fetchOrderbook(algo: string, market: string): Promise<numb
 }
 
 export async function getNhBestMarketPrice(algo: string = 'SHA256ASICBOOST'): Promise<{ market: string; btcPerEhDay: number }> {
-  const markets = ['EU', 'USA'];
+  const markets = ['USA', 'EU'];
   const results = await Promise.allSettled(markets.map((m) => fetchOrderbook(algo, m)));
   const priced: { market: string; btcPerEhDay: number }[] = [];
   results.forEach((r, i) => {
     if (r.status === 'fulfilled' && isFinite(r.value)) priced.push({ market: markets[i], btcPerEhDay: r.value });
   });
-  if (!priced.length) {
-    // fallback: try USA only
-    const v = await fetchOrderbook(algo, 'USA');
-    if (isFinite(v)) return { market: 'USA', btcPerEhDay: v };
-    throw new Error('No market prices available');
-  }
+  if (!priced.length) throw new Error('No market prices available');
   priced.sort((a, b) => a.btcPerEhDay - b.btcPerEhDay);
   return priced[0];
 }
