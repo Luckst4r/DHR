@@ -1,9 +1,11 @@
+// nhOrder.ts — NiceHash order placement/cancel using wrapper helpers.
 import fetch from 'node-fetch';
 import crypto from 'node:crypto';
 import { ensurePool } from './pool.js';
 import { btcUsd } from './pricing.js';
 import { getNhBuyInfo, getNhBestMarketPrice, buildNhOrderParams } from './nh.js';
 
+// Legacy NH signing kept for order create/cancel calls (wrapper not used here).
 function nhSign({ method, path, query = '', body = '', time, nonce, org, key, secret }: any) {
   const qs = query ? `?${query}` : '';
   const requestId = crypto.randomUUID();
@@ -21,6 +23,7 @@ export interface NhOrderResult {
   poolId: string;
 }
 
+// Create NH order: probe cheapest market, ensure pool, build price/limit/amount, POST order, return id.
 export async function createNhOrder(opts: {
   ph: number;
   hours: number;
@@ -92,6 +95,7 @@ export async function createNhOrder(opts: {
   return { id, market, price, limit, amount, poolId };
 }
 
+// Cancel NH order by id.
 export async function cancelNhOrder(orderId: string): Promise<void> {
   const key = process.env.NICEHASH_API_KEY;
   const secret = process.env.NICEHASH_API_SECRET;
