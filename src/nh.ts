@@ -18,6 +18,44 @@ export interface NhBuyInfo {
   raw: any;
 }
 
+export function buildNhOrderParams({
+  ph,
+  hours,
+  usdPerPhDay,
+  market,
+  algo = 'SHA256ASICBOOST',
+  btcPrice,
+  buyInfo,
+}: {
+  ph: number;
+  hours: number;
+  usdPerPhDay: number;
+  market: string;
+  algo?: string;
+  btcPrice: number;
+  buyInfo: NhBuyInfo;
+}) {
+  if (!isFinite(ph) || ph <= 0) throw new Error('bad ph');
+  if (!isFinite(hours) || hours <= 0) throw new Error('bad hours');
+  if (!isFinite(usdPerPhDay) || usdPerPhDay <= 0) throw new Error('bad usdPerPhDay');
+  if (!isFinite(btcPrice) || btcPrice <= 0) throw new Error('bad btcPrice');
+
+  const marketUpper = market.toUpperCase();
+  const m = buyInfo.markets.find((x) => x.market === marketUpper);
+  if (!m) throw new Error(`market ${marketUpper} not in buyInfo`);
+
+  // price in BTC per EH/day for SHA256ASICBOOST
+  const priceBtcPerEhDay = (usdPerPhDay / btcPrice) * 1000;
+  const limitEh = ph / 1000; // PH -> EH/s
+  const amountBtc = priceBtcPerEhDay * limitEh * (hours / 24);
+
+  const price = priceBtcPerEhDay; // NH expects BTC per factor/day; factor is EH for SHA256
+  const limit = limitEh; // EH/s
+  const amount = amountBtc;
+
+  return { price, limit, amount, market: marketUpper, algo };
+}
+
 export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<NhBuyInfo> {
   const res = await fetch('https://api2.nicehash.com/main/api/v2/public/buy/info');
   if (!res.ok) {
