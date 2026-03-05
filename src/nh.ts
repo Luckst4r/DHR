@@ -41,8 +41,14 @@ export function buildNhOrderParams({
   if (!isFinite(btcPrice) || btcPrice <= 0) throw new Error('bad btcPrice');
 
   const marketUpper = market.toUpperCase();
-  const m = buyInfo.markets.find((x) => x.market === marketUpper);
-  if (!m) throw new Error(`market ${marketUpper} not in buyInfo`);
+  const m = buyInfo.markets.find((x) => x.market === marketUpper || x.market.startsWith(marketUpper));
+  if (!m) {
+    if (buyInfo.markets.length) {
+      const fallback = buyInfo.markets[0];
+      return buildNhOrderParams({ ph, hours, usdPerPhDay, market: fallback.market, algo, btcPrice, buyInfo });
+    }
+    throw new Error(`market ${marketUpper} not in buyInfo`);
+  }
 
   // price in BTC per EH/day for SHA256ASICBOOST
   const priceBtcPerEhDay = (usdPerPhDay / btcPrice) * 1000;
