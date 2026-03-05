@@ -1,3 +1,6 @@
+// nh.ts — NiceHash utilities via nicehash-api-wrapper-v2.
+// - Fetch buy/info factors, orderbook, best market price.
+// - Build NH order params (price BTC/EH/day, limit EH/s, amount BTC) from USD/PH-day quotes.
 import fetch from 'node-fetch';
 import NHApi from 'nicehash-api-wrapper-v2';
 
@@ -27,6 +30,7 @@ export interface NhBuyInfo {
   raw: any;
 }
 
+// Build NH order params from USD/PH-day: price BTC/EH-day, limit EH/s, amount BTC.
 export function buildNhOrderParams({
   ph,
   hours,
@@ -70,6 +74,7 @@ export function buildNhOrderParams({
   return { price, limit, amount, market: marketUpper, algo };
 }
 
+// Helper to normalize algo code from buy/info entries.
 function algoCode(a: any): string {
   if (!a) return '';
   if (typeof a === 'string') return a;
@@ -81,6 +86,7 @@ function algoCode(a: any): string {
   return '';
 }
 
+// Get buy/info for algo; parse market factors/mins.
 export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<NhBuyInfo> {
   const nh = getNhClient();
   const data: any = await nh.HashPower.getBuyInfo();
@@ -117,6 +123,7 @@ export async function fetchOrderbook(algo: string, market: string): Promise<numb
   return Math.min(...prices); // BTC per EH/day
 }
 
+// Get cheapest market (USA -> EU) and return min price BTC/EH-day.
 export async function getNhBestMarketPrice(algo: string = 'SHA256ASICBOOST'): Promise<{ market: string; btcPerEhDay: number }> {
   const nh = getNhClient();
   const ob: any = await nh.HashPower.getOrderBook(algo, 50, 0);
