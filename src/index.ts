@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { quoteHashrate, btcUsd } from './pricing.js';
-import { createOrder, getOrderStatus, cancelOrder, markPaid } from './orders.js';
+import { createOrder, getOrderStatus, cancelOrder, markPaid, getOrder } from './orders.js';
 import { validatePool } from './pools.js';
 import { braiinsBalanceUsd, nicehashBalanceUsd } from './balances.js';
+import { createNhOrder, cancelNhOrder } from './nhOrder.js';
 
 const token = process.env.DISCORD_TOKEN ?? '';
 const appId = process.env.DISCORD_APP_ID ?? '';
@@ -211,12 +212,33 @@ async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
   }
   const id = interaction.options.getString('id', true);
   const msg = await markPaid(id);
-  // fulfillment stub
-  const fulfillUrl = process.env.INTERNAL_FULFILL_URL;
-  if (fulfillUrl) {
-    // TODO: call fulfill endpoint to retarget hash
+  let extra = '';
+  try {
+    const o = await getOrder(id);
+    if (o) {
+      const usdPerPhDay = await latestUsdPerPhDay(o);
+      const nh = await createNhOrder({ ph: o.ph, hours: o.hours, poolUrl: o.pool, worker: o.worker, usdPerPhDay });
+      extra = `\nNiceHash order placed: ${nh.id} (market ${nh.market}, price ${nh.price.toFixed(8)} BTC/EH/day, limit ${nh.limit.toFixed(6)} EH/s).`; // ephemeral log
+      // schedule cancel at expiry
+      const ms = o.hours * 3600 * 1000;
+      setTimeout(() => {
+        cancelNhOrder(nh.id).catch((err) => console.error('cancel NH order failed', err));
+      }, ms);
+    }
+  } catch (err) {
+    console.error('fulfillment error', err);
+    extra = '\n(Fulfillment error: ' + (err as Error).message + ')';
   }
-  await interaction.reply({ content: msg, ephemeral: true });
+  await interaction.reply({ content: msg + extra, ephemeral: true });
+}
+
+async function latestUsdPerPhDay(o: { ph: number; hours: number; pool: string; worker: string }): Promise<number> {
+  try {
+    const q = await quoteHashrate({ ph: o.ph, hours: o.hours, pool: o.pool, worker: o.worker });
+    return q.usdPerPhDay;
+  } catch {
+    return NaN;
+  }
 }
 
 async function handleStatus(interaction: ChatInputCommandInteraction) {
