@@ -97,7 +97,7 @@ export async function fetchOrderbook(algo: string, market: string): Promise<numb
   const res = await fetch(url);
   if (!res.ok) throw new Error(`orderBook ${market} http ${res.status}`);
   const data: any = await res.json();
-  const orders = data?.stats?.orders ?? data?.orderList ?? [];
+  const orders = data?.stats?.[market]?.orders || data?.stats?.orders || data?.orderList || [];
   const prices = Array.isArray(orders)
     ? orders
         .map((o: any) => Number(o.price))
