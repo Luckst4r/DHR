@@ -73,6 +73,6 @@ export async function nicehashBalanceUsd(): Promise<WalletStatus> {
       const usd = overrideBtc * (await btcUsd());
       return { usd, raw: { override: true, btc: overrideBtc } };
     }
-    return { usd: Number.POSITIVE_INFINITY, raw: null };
+    return { usd: Number.POSITIVE_INFINITY, raw: { error: (err as Error).message } };
   }
 }

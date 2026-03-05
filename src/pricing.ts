@@ -64,12 +64,29 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
 }
 
 export async function btcUsd(): Promise<number> {
-  const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
-  if (!res.ok) throw new Error('btc price failed');
-  const data: any = await res.json();
-  const price = data?.bitcoin?.usd;
-  if (typeof price !== 'number') throw new Error('btc price missing');
-  return price;
+  const override = process.env.BTC_USD_OVERRIDE ? Number(process.env.BTC_USD_OVERRIDE) : undefined;
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+    if (!res.ok) throw new Error('coingecko failed');
+    const data: any = await res.json();
+    const price = data?.bitcoin?.usd;
+    if (typeof price !== 'number') throw new Error('coingecko missing price');
+    return price;
+  } catch (err) {
+    console.error('btcUsd coingecko error', err);
+    try {
+      const res2 = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+      if (!res2.ok) throw new Error('coinbase failed');
+      const data2: any = await res2.json();
+      const price2 = Number(data2?.data?.amount);
+      if (!isFinite(price2)) throw new Error('coinbase missing price');
+      return price2;
+    } catch (err2) {
+      console.error('btcUsd coinbase error', err2);
+      if (override && isFinite(override)) return override;
+      throw new Error('btc price failed');
+    }
+  }
 }
 
 function skipQuote(source: string): QuoteResult {
