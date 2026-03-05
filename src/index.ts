@@ -5,6 +5,7 @@ import { createOrder, getOrderStatus, cancelOrder, markPaid, getOrder, saveNhInf
 import { validatePool } from './pools.js';
 import { braiinsBalanceUsd, nicehashBalanceUsd } from './balances.js';
 import { createNhOrder, cancelNhOrder } from './nhOrder.js';
+import { createBraiinsOrder } from './braiins.js';
 
 const token = process.env.DISCORD_TOKEN ?? '';
 const appId = process.env.DISCORD_APP_ID ?? '';
@@ -224,18 +225,27 @@ async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
       return;
     }
     const usdPerPhDay = await latestUsdPerPhDay(o);
-    const nh = await createNhOrder({ ph: o.ph, hours: o.hours, poolUrl: o.pool, worker: o.worker, usdPerPhDay });
-    await saveNhInfo(id, { nhOrderId: nh.id, nhMarket: nh.market, nhPrice: nh.price, nhLimit: nh.limit, nhAmount: nh.amount });
-    const expiresAt = Date.now() + o.hours * 3600 * 1000;
-    await updateExpiry(id, expiresAt);
+    let placed = '';
+    try {
+      const token = process.env.BRAIINS_OWNER_TOKEN || process.env.BRAIINS_READONLY_TOKEN;
+      if (!token) throw new Error('Missing Braiins token');
+      const br = await createBraiinsOrder({ ph: o.ph, hours: o.hours, poolUrl: o.pool, worker: o.worker, usdPerPhDay, token: token, memo: `order-${id}` });
+      placed = `Braiins order placed: ${br.id}`;
+    } catch (err) {
+      console.error('braiins fulfillment error', err);
+      const nh = await createNhOrder({ ph: o.ph, hours: o.hours, poolUrl: o.pool, worker: o.worker, usdPerPhDay });
+      await saveNhInfo(id, { nhOrderId: nh.id, nhMarket: nh.market, nhPrice: nh.price, nhLimit: nh.limit, nhAmount: nh.amount });
+      const expiresAt = Date.now() + o.hours * 3600 * 1000;
+      await updateExpiry(id, expiresAt);
+      placed = `NiceHash order placed: ${nh.id} (market ${nh.market}, price ${nh.price.toFixed(8)} BTC/EH/day, limit ${nh.limit.toFixed(6)} EH/s).`;
+      // schedule cancel at expiry
+      const ms = o.hours * 3600 * 1000;
+      setTimeout(() => {
+        cancelNhOrder(nh.id).catch((err2) => console.error('cancel NH order failed', err2));
+      }, ms);
+    }
     const msg = await markPaid(id);
-    extra = `\nNiceHash order placed: ${nh.id} (market ${nh.market}, price ${nh.price.toFixed(8)} BTC/EH/day, limit ${nh.limit.toFixed(6)} EH/s).`; // ephemeral log
-    // schedule cancel at expiry
-    const ms = o.hours * 3600 * 1000;
-    setTimeout(() => {
-      cancelNhOrder(nh.id).catch((err) => console.error('cancel NH order failed', err));
-    }, ms);
-    await interaction.reply({ content: msg + extra, ephemeral: true });
+    await interaction.reply({ content: msg + '\n' + placed, ephemeral: true });
   } catch (err) {
     console.error('fulfillment error', err);
     const msg = `Fulfillment error: ${(err as Error).message}`;
