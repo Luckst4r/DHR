@@ -1,6 +1,8 @@
+// pool.ts — ensure NiceHash pool exists for given algo/host/port/user; creates if needed (cached in-memory).
 import fetch from 'node-fetch';
 import crypto from 'node:crypto';
 
+// NH signing helper (legacy) for pool create.
 function nhSign({ method, path, query = '', body = '', time, nonce, org, key, secret }: any) {
   const qs = query ? `?${query}` : '';
   const requestId = crypto.randomUUID();
@@ -20,6 +22,7 @@ interface PoolInput {
 
 const poolCache = new Map<string, string>(); // key: algo|host|port|user -> poolId
 
+// Create/reuse pool; caches poolId by algo/host/port/user
 export async function ensurePool(input: PoolInput): Promise<string> {
   const { algorithm, host, port, username, password = 'x', name = 'auto-pool' } = input;
   const key = `${algorithm}|${host}|${port}|${username}`.toLowerCase();
