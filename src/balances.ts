@@ -36,6 +36,10 @@ export async function braiinsBalanceUsd(): Promise<WalletStatus> {
 
 export async function nicehashBalanceUsd(): Promise<WalletStatus> {
   const overrideBtc = process.env.NICEHASH_BAL_OVERRIDE_BTC ? Number(process.env.NICEHASH_BAL_OVERRIDE_BTC) : undefined;
+  if (overrideBtc && isFinite(overrideBtc)) {
+    const usd = overrideBtc * (await btcUsd());
+    return { usd, raw: { override: true, btc: overrideBtc } };
+  }
   try {
     const nh = getNhClient();
     const data: any = await nh.Accounting.getBalance();
@@ -47,10 +51,6 @@ export async function nicehashBalanceUsd(): Promise<WalletStatus> {
     return { usd, raw: data };
   } catch (err) {
     console.error('nicehash balance error', err);
-    if (overrideBtc && isFinite(overrideBtc)) {
-      const usd = overrideBtc * (await btcUsd());
-      return { usd, raw: { override: true, btc: overrideBtc, error: (err as Error).message } };
-    }
     return { usd: Number.POSITIVE_INFINITY, raw: { error: (err as Error).message } };
   }
 }
