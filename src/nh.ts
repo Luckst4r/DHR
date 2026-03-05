@@ -56,6 +56,17 @@ export function buildNhOrderParams({
   return { price, limit, amount, market: marketUpper, algo };
 }
 
+function algoCode(a: any): string {
+  if (!a) return '';
+  if (typeof a === 'string') return a;
+  if (typeof a.algorithm === 'string') return a.algorithm;
+  if (typeof a.algo === 'string') return a.algo;
+  if (typeof a.code === 'string') return a.code;
+  if (typeof a.name === 'string') return a.name;
+  if (typeof a.enumCode === 'string') return a.enumCode;
+  return '';
+}
+
 export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<NhBuyInfo> {
   const res = await fetch('https://api2.nicehash.com/main/api/v2/public/buy/info');
   if (!res.ok) {
@@ -64,8 +75,9 @@ export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<Nh
   }
   const data: any = await res.json();
   const algos: any[] = data?.algorithms ?? data?.miningAlgorithms ?? [];
-  const entry = algos.find((a) => (a.algorithm || a.algo || '').toUpperCase() === algo.toUpperCase());
+  const entry = algos.find((a) => algoCode(a).toUpperCase() === algo.toUpperCase());
   if (!entry) throw new Error(`algo ${algo} not found in buy/info`);
+  const entryAlgo = algoCode(entry);
   const markets: NhMarketInfo[] = (entry?.markets || entry?.market || []).map((m: any) => ({
     market: (m.market || m.name || '').toUpperCase(),
     marketFactor: Number(m.marketFactor || m.factor || m.market_factor || 0),
@@ -75,9 +87,9 @@ export async function getNhBuyInfo(algo: string = 'SHA256ASICBOOST'): Promise<Nh
     minAmount: Number(m.minAmount || m.minimumAmount || 0),
     minPrice: Number(m.minPrice || m.minimumPrice || 0),
     fixedPrice: Number(m.fixedPrice || m.fixed_price || 0) || undefined,
-    algorithm: entry.algorithm || entry.algo,
+    algorithm: entryAlgo,
   }));
-  return { algo: entry.algorithm || entry.algo, markets, raw: data };
+  return { algo: entryAlgo, markets, raw: data };
 }
 
 async function fetchOrderbook(algo: string, market: string): Promise<number> {
