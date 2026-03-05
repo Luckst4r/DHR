@@ -1,3 +1,9 @@
+// Discord bot entrypoint: handles slash commands (/quote, /rent, /status, /cancel, /mark_paid).
+// - /quote: price with fee/margin/buffer breakdown; no pool/worker required.
+// - /rent: validates size/duration/pool, checks balances, locks quote, returns payment instructions.
+// - /mark_paid: admin-only; tries Braiins order first, falls back to NiceHash; stores order metadata + expiry.
+// - Balance gates: Braiins always; NiceHash optional via env toggle/override.
+// - Payment methods: USDC (Base), USDC (Solana), BTC.
 import 'dotenv/config';
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { quoteHashrate, btcUsd } from './pricing.js';
@@ -14,6 +20,7 @@ if (!token || !appId) {
   throw new Error('Missing DISCORD_TOKEN or DISCORD_APP_ID');
 }
 
+// Slash command definitions
 const commands = [
   new SlashCommandBuilder()
     .setName('quote')
@@ -53,6 +60,7 @@ client.on('ready', () => {
   console.log(`Logged in as ${client.user?.tag}`);
 });
 
+// Route slash commands to handlers; reply ephemeral on errors.
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   try {
@@ -83,6 +91,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+// /quote: lightweight quote without pool/worker, just PH + hours.
 async function handleQuote(interaction: ChatInputCommandInteraction) {
   const ph = interaction.options.getNumber('ph', true);
   const hours = interaction.options.getInteger('hours', true);
@@ -140,13 +149,14 @@ async function handleQuote(interaction: ChatInputCommandInteraction) {
   await interaction.reply({ content: lines.join('\n'), ephemeral: true });
 }
 
+// /rent: validates inputs, balance gates, locks price, returns payment instructions.
 async function handleRent(interaction: ChatInputCommandInteraction) {
   const ph = interaction.options.getNumber('ph', true);
   const hours = interaction.options.getInteger('hours', true);
   const pool = interaction.options.getString('pool', true);
   const worker = interaction.options.getString('worker', true);
 
-  // Balance gate
+  // Balance gate: Braiins always; NiceHash optional (env toggle) with override support.
   const braiinsBal = await braiinsBalanceUsd();
   const nhBal = await nicehashBalanceUsd();
   const nhGate = (process.env.NICEHASH_GATE_ENABLED ?? 'true').toLowerCase() !== 'false';
@@ -190,6 +200,8 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
     return;
   }
 
+  // Create order, lock price, and return payment instructions.
+  // Create order, lock price, and return payment instructions.
   const order = await createOrder({ ph, hours, pool, worker, user: interaction.user.id, totalUsd: q.totalUsd });
   const btcPrice = await btcUsd().catch(() => NaN);
   const btcDue = isFinite(btcPrice) && btcPrice > 0 ? order.totalUsd / btcPrice : NaN;
@@ -206,6 +218,7 @@ async function handleRent(interaction: ChatInputCommandInteraction) {
   await interaction.reply({ content: lines.join('\n'), ephemeral: true });
 }
 
+// /mark_paid: admin-only. Try Braiins first, then fallback to NiceHash. Only mark active if fulfillment succeeds.
 async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
   const adminIds = (process.env.ADMIN_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   if (!adminIds.includes(interaction.user.id)) {
@@ -253,6 +266,7 @@ async function handleMarkPaid(interaction: ChatInputCommandInteraction) {
   }
 }
 
+// Re-quote to get latest usdPerPhDay for activation; tolerate failure by returning NaN.
 async function latestUsdPerPhDay(o: { ph: number; hours: number; pool: string; worker: string }): Promise<number> {
   try {
     const q = await quoteHashrate({ ph: o.ph, hours: o.hours, pool: o.pool, worker: o.worker });
