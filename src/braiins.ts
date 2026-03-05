@@ -1,3 +1,4 @@
+// braiins.ts — Braiins spot helpers: settings, orderbook, price/limit conversion, bid placement.
 import fetch from 'node-fetch';
 
 export interface BraiinsSettings {
@@ -17,6 +18,7 @@ export interface BraiinsOrderParams {
   amountBtc: number; // estimated cost for window at price cap
 }
 
+// Parse hr_unit (e.g., PH/day, EH/day, TH/day) to a PH/day multiplier.
 function parseHrUnit(unit: string): number {
   const u = unit.toLowerCase();
   if (u.includes('ph/day')) return 1;
@@ -27,6 +29,7 @@ function parseHrUnit(unit: string): number {
 
 const BRAIINS_BASE = process.env.BRAIINS_BASE || 'https://hashpower.braiins.com/api/v1';
 
+// Generic authed fetch to Braiins base.
 async function fetchJson(path: string, token: string): Promise<any> {
   const headers = { Authorization: `Bearer ${token}` } as any;
   const res = await fetch(`${BRAIINS_BASE}${path}`, { headers });
@@ -34,6 +37,7 @@ async function fetchJson(path: string, token: string): Promise<any> {
   return res.json();
 }
 
+// Fetch market settings (hr_unit) to convert prices/limits.
 export async function getBraiinsSettings(token: string): Promise<BraiinsSettings> {
   const data: any = await fetchJson('/spot/settings', token);
   const hrUnit: string = data?.hr_unit ?? '';
@@ -42,13 +46,14 @@ export async function getBraiinsSettings(token: string): Promise<BraiinsSettings
   return { hrUnit, hrUnitToPhDay, raw: data };
 }
 
+// Fetch spot orderbook; extract asks.
 export async function getBraiinsOrderbook(token: string): Promise<BraiinsOrderbook> {
   const data: any = await fetchJson('/spot/orderbook', token);
   const asks = Array.isArray(data?.asks) ? data.asks.map((a: any) => ({ price_sat: Number(a.price_sat) })) : [];
   return { asks, raw: data };
 }
 
-// Convert quoted USD/PH-day to Braiins pricing units and limits
+// Convert quoted USD/PH-day to Braiins pricing units and limits (price sat/hr_unit, limit in hr_unit/s, amount BTC).
 export function buildBraiinsOrderParams(opts: {
   ph: number;
   hours: number;
@@ -82,6 +87,7 @@ export function buildBraiinsOrderParams(opts: {
   return { priceSatPerUnit, limitUnit, amountBtc };
 }
 
+// Create a Braiins spot bid: uses /spot/bid with quoted price cap and user pool/worker.
 export async function createBraiinsOrder(opts: {
   ph: number;
   hours: number;
