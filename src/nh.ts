@@ -55,6 +55,8 @@ export function buildNhOrderParams({
     m = buyInfo.markets[0];
   }
   if (!m) throw new Error(`market ${marketUpper} not in buyInfo and no fallback`);
+  // enforce market to matched one
+  market = m.market;
 
   // price in BTC per EH/day for SHA256ASICBOOST
   const priceBtcPerEhDay = (usdPerPhDay / btcPrice) * 1000;
@@ -121,7 +123,7 @@ export async function getNhBestMarketPrice(algo: string = 'SHA256ASICBOOST'): Pr
   const markets = ['USA', 'EU'];
   const priced: { market: string; btcPerEhDay: number }[] = [];
   for (const m of markets) {
-    const orders = ob?.stats?.[m]?.orders;
+    const orders = ob?.stats?.[m]?.orders || ob?.stats?.orders;
     if (Array.isArray(orders) && orders.length) {
       const prices = orders.map((o: any) => Number(o.price)).filter((n: number) => !isNaN(n));
       if (prices.length) priced.push({ market: m, btcPerEhDay: Math.min(...prices) });
