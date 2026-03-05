@@ -1,3 +1,7 @@
+// pricing.ts — quote logic.
+// Converts market prices to USD/PH-day, applies platform fees, margin, and buffer.
+// Sources: NiceHash orderbook, Braiins orderbook, internal capacity (stub).
+// Returns a full breakdown: base, fee, margin, buffer, total.
 import fetch from 'node-fetch';
 
 interface QuoteInput {
@@ -24,6 +28,7 @@ const nhFeeBps = Number(process.env.NICEHASH_FEE_BPS ?? '200'); // default 2%
 const braiinsFeeBps = Number(process.env.BRAIINS_FEE_BPS ?? '200'); // default 2%
 const disableNicehash = false; // re-enable NiceHash
 
+// quoteHashrate: gather quotes from NiceHash, Braiins, internal; pick cheapest after fees/margin/buffer.
 export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   const marketQuotes = await Promise.allSettled([
     disableNicehash ? Promise.resolve(skipQuote('nicehash')) : quoteNicehash(input, nhFeeBps),
@@ -63,6 +68,7 @@ export async function quoteHashrate(input: QuoteInput): Promise<QuoteResult> {
   return best;
 }
 
+// Fetch BTC/USD with fallback and optional override.
 export async function btcUsd(): Promise<number> {
   const override = process.env.BTC_USD_OVERRIDE ? Number(process.env.BTC_USD_OVERRIDE) : undefined;
   try {
@@ -89,6 +95,7 @@ export async function btcUsd(): Promise<number> {
   }
 }
 
+// Return a skip quote to represent an unavailable source.
 function skipQuote(source: string): QuoteResult {
   return {
     usdPerPhDay: Number.POSITIVE_INFINITY,
@@ -101,6 +108,7 @@ function skipQuote(source: string): QuoteResult {
   };
 }
 
+// Quote NiceHash: BTC/EH/day -> USD/PH-day, apply platform fee.
 async function quoteNicehash(input: QuoteInput, feeBps: number): Promise<QuoteResult> {
   const key = process.env.NICEHASH_API_KEY;
   const secret = process.env.NICEHASH_API_SECRET;
@@ -162,6 +170,7 @@ async function quoteNicehash(input: QuoteInput, feeBps: number): Promise<QuoteRe
   }
 }
 
+// Quote Braiins: sats/hr_unit -> USD/PH-day, apply platform fee.
 async function quoteBraiinshash(input: QuoteInput, feeBps: number): Promise<QuoteResult> {
   const token = process.env.BRAIINS_READONLY_TOKEN || process.env.BRAIINS_OWNER_TOKEN;
   if (!token)
@@ -239,6 +248,7 @@ async function braiinsOrderbook(token: string): Promise<any> {
   return res.json();
 }
 
+// Quote internal capacity API (stubbed).
 async function quoteInternal(input: QuoteInput): Promise<QuoteResult> {
   // Stub: call your internal capacity API if available
   const url = process.env.INTERNAL_CAPACITY_API;
